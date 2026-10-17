@@ -4123,12 +4123,13 @@ function frame() {
 // ============================================================
 let MPNET = null;
 const MP_RELAY_KEY = 'arcaneRelay';
+const MP_DEFAULT_RELAY = 'wss://arcane-duel-relay.mgring715.workers.dev';
 function mpRelayBase() {
   const q = new URLSearchParams(location.search);
   let r = q.get('relay') || '';
   if (!r) { const el = document.getElementById('mpRelay'); if (el && el.value.trim()) r = el.value.trim(); }
   if (!r) { try { r = localStorage.getItem(MP_RELAY_KEY) || ''; } catch (_) {} }
-  if (!r && (location.protocol === 'http:' || location.protocol === 'https:')) r = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+  if (!r) r = MP_DEFAULT_RELAY;
   return r.replace(/^http/, 'ws').replace(/\/+$/, '');
 }
 const va = (v) => [Math.round(v.x * 1000) / 1000, Math.round(v.y * 1000) / 1000, Math.round(v.z * 1000) / 1000];
@@ -4210,8 +4211,8 @@ function mpPanel() {
     <div style="font-size:24px;font-weight:700;letter-spacing:.06em;margin-bottom:4px">⚔ MULTIPLAYER</div>
     <div style="font-size:13px;opacity:.75;margin-bottom:16px">Duel a friend over the internet. You fight as your selected class (${'Sorceress or Warrior'}).</div>
     <div style="margin-bottom:12px;text-align:left">
-      <div style="font-size:12px;opacity:.75;margin-bottom:4px">RELAY URL — set once per computer (from the Cloudflare setup)</div>
-      <input id="mpRelay" placeholder="wss://arcane-duel-relay.YOUR-NAME.workers.dev" style="width:100%;padding:9px;font-size:13px;border-radius:9px;border:1px solid #4a5f9e;background:#0c1222;color:#fff">
+      <div style="font-size:12px;opacity:.75;margin-bottom:4px">RELAY URL — already set, leave it as is</div>
+      <input id="mpRelay" placeholder="wss://arcane-duel-relay.mgring715.workers.dev" style="width:100%;padding:9px;font-size:13px;border-radius:9px;border:1px solid #4a5f9e;background:#0c1222;color:#fff">
     </div>
     <div id="mpHostBox">
       <button id="mpHostBtn" style="width:100%;padding:11px;margin:4px 0;font-size:16px;cursor:pointer;border-radius:9px;border:1px solid #4a5f9e;background:#22335f;color:#fff">Host a match</button>
@@ -4230,7 +4231,7 @@ function mpPanel() {
     <button id="mpCloseBtn" style="margin-top:14px;padding:8px 18px;cursor:pointer;border-radius:9px;border:1px solid #555;background:transparent;color:#aab">Close</button>
   </div>`;
   document.body.appendChild(el);
-  try { $('mpRelay').value = localStorage.getItem(MP_RELAY_KEY) || ''; } catch (_) {}
+  try { $('mpRelay').value = localStorage.getItem(MP_RELAY_KEY) || MP_DEFAULT_RELAY; } catch (_) { $('mpRelay').value = MP_DEFAULT_RELAY; }
   const keepRelay = () => { try { localStorage.setItem(MP_RELAY_KEY, $('mpRelay').value.trim()); } catch (_) {} };
   $('mpHostBtn').onclick = () => { keepRelay(); MPNET = mpNewNet('host'); MPNET.hostGame(); };
   $('mpJoinBtn').onclick = () => { keepRelay(); MPNET = mpNewNet('guest'); MPNET.joinGame($('mpJoinCode').value.trim().toUpperCase()); };
