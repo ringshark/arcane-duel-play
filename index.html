@@ -141,7 +141,7 @@
 <script src="class-art.js"></script>
 <script src="warrior-art.js"></script>
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
 </script>
 </head>
 <body>
@@ -191,6 +191,7 @@
 
 <script type="module">
 import * as THREE from 'three';
+import { WarriorAvatar, loadWarriorAssets } from './warrior-3d.js';
 
 // ============================================================
 // CONFIG — tweak balance here
@@ -1206,6 +1207,8 @@ class Sorceress {
 
   // (Re)build the four directional views from a character's processed art (used to switch class)
   setArt(art) {
+    if (this.avatar3D) { this.avatar3D.dispose(); this.avatar3D = null; }
+    this.billboard.visible = true;
     this.art = art;
     if (this.shield3D) { this.root.remove(this.shield3D); this.shield3D = null; }   // rebuilt for the new class if it carries one
     if (this.views) for (const k in this.views) this.inner.remove(this.views[k].mesh);
@@ -1290,6 +1293,11 @@ class Sorceress {
     }
     this.view = 'front';
     this.views.front.mesh.visible = true;
+    if (art === CLASS_VIEWS.warrior) {
+      this.avatar3D = new WarriorAvatar(this, WARRIOR_ASSETS);
+      this.avatar3D.root.visible = !this.dummy?.visible;
+      this.billboard.visible = false;
+    }
   }
 
   reset(pos, yaw) {
@@ -1317,11 +1325,12 @@ class Sorceress {
     this.shieldT = 0; this.shieldHitT = 0;   // shield spell time left, hit flash
     this.crouching = false; this.crouchK = 0;  // crouchK eases 0 (standing) → 1 (crouched)
     this.fall.rotation.set(0, 0, 0); this.fall.scale.set(1, 1, 1); this.pivot.rotation.set(0, 0, 0);
+    this.avatar3D?.reset();
   }
 
   headPos(out = new V3()) { return this.headHB.getWorldPosition(out); }
   chestPos(out = new V3()) { return this.chestAnchor.getWorldPosition(out); }
-  orbPos(out = new V3()) { return this.views[this.view].orbAnchor.getWorldPosition(out); }
+  orbPos(out = new V3()) { return (this.avatar3D ? this.avatar3D.tip : this.views[this.view].orbAnchor).getWorldPosition(out); }
   forward(out = new V3()) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
   get busy() { return this.dead || this.rolling || this.swingT >= 0 || !!this.blockType || !!this.skill || this.stunT > 0; }
   // Warrior skills (1-4, Q). Returns an error message, or null when it started.
@@ -1569,6 +1578,18 @@ class Sorceress {
 
   animate(dt, time) {
     if (this.dummy && this.dummy.visible) { this.orbGlow.visible = false; this.shield.visible = false; animateDummy(this, dt); return; }   // Test mode dummy
+    if (this.avatar3D) {
+      const bashing = this.skill?.id === 'bash';
+      this.shieldUpK += ((this.blockType === 'guard' || bashing ? 1 : 0) - this.shieldUpK) * Math.min(1, dt * (bashing ? 30 : 14));
+      updateShield3D(this, { shieldArm: null }, dt);
+      this.avatar3D.update(dt, CFG);
+      this.hb.scale.y = (this.rolling ? 0.55 : 1) * (1 - 0.5 * this.crouchK);
+      this.hb.position.y = 0;
+      this.root.updateMatrixWorld(true);
+      this.orbGlow.visible = false; this.orbLight.intensity = 0; this.shield.visible = false;
+      if (this.swingT >= 0 && !this.swooshed) { this.swooshed = true; playSwoosh(this.orbPos()); }
+      return;
+    }
     const pos = this.root.position;
     const hs = Math.hypot(this.vel.x, this.vel.z);
     if (this.onGround && !this.rolling && hs > 0.3) this.walkPhase += dt * hs * 2.0;
@@ -1863,6 +1884,14 @@ const CLASS_VIEWS = {
   sorceress: await buildArt(ART, window.SORCERESS_ART),
   warrior: await buildArt(WARRIOR, window.WARRIOR_ART),
 };
+const WARRIOR_ASSETS = await loadWarriorAssets(renderer).catch(error => {
+  const panel = document.getElementById('overlayPanel');
+  panel.textContent = 'The 3D warrior could not load. Serve this folder over HTTP and check the asset requests, then reload.';
+  document.getElementById('overlay').style.display = 'grid';
+  throw error;
+});
+const warriorFill = new THREE.DirectionalLight(0xbccfff, 0.65);
+warriorFill.position.set(-8, 6, -10); scene.add(warriorFill);
 const ART_VIEWS = CLASS_VIEWS.sorceress;
 CFG.crouch.drop = FIGURE_H * 0.5;   // squatting halves her height
 const player = new Sorceress({ name: 'You', orb: 0x4fd8ff, art: ART_VIEWS });
@@ -1934,6 +1963,7 @@ function setDummyMode(on) {
   dummyModel.visible = on;
   stopSpellSound(bot);
   for (const k in bot.views) bot.views[k].mesh.visible = !on && k === bot.view;
+  if (bot.avatar3D) bot.avatar3D.root.visible = !on;
   bot.orbGlow.visible = false;
   document.querySelector('.bar-wrap.right .name').textContent = on ? 'TEST DUMMY' : 'RIVAL SORCERESS';
   document.querySelector('#nameplate span').textContent = on ? 'Test Dummy' : 'Rival Sorceress';
@@ -2984,6 +3014,7 @@ function shieldWorldPos(c) {
 // iron rim round the edge. Lives on the character root (local -z = forward, +x = his right, shield arm side).
 const SHIELD_R = 0.38, SHIELD_T = 0.05;
 function buildShield3D(c) {
+  if (c.avatar3D) return c.avatar3D.createShield();
   const disc = (src, flip) => {
     const n = 512, cv = document.createElement('canvas'); cv.width = cv.height = n;
     const g = cv.getContext('2d');
@@ -3017,7 +3048,7 @@ function updateShield3D(c, V, dt) {
   s.visible = !c.shieldBroken && !c.dead;
   const f = c.flashT / 0.18;   // hit flash, like the rest of him
   for (const m of s.userData.mats) m.color.setRGB(1, 1 - f * 0.65, 1 - f * 0.65);
-  s.userData.mats[0].color.multiplyScalar(0.62);
+  if (!s.userData.meshy) s.userData.mats[0].color.multiplyScalar(0.62);
   const away = c.gear && c.gear.item === 'shield' ? (c.gear.toOut ? 1 - c.gear.t / CFG.gear.time : c.gear.t / CFG.gear.time) : (c.shieldOut ? 0 : 1);
   const sb = clamp(away, 0, 1) ** 2 * (3 - 2 * clamp(away, 0, 1)), k = c.shieldUpK, A = c.shieldAim;
   const bashing = c.skill && c.skill.id === 'bash' ? Math.sin(Math.min(1, c.skill.t / CFG.bash.time * 2) * Math.PI) : 0;
