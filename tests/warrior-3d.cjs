@@ -14,10 +14,10 @@ const hook=`const _warriorOriginalCamera=updateCamera;window.__warriorTest={play
 async function withGame(callback,{viewport={width:1280,height:720}}={}){
  const server=http.createServer(async(req,res)=>{try{if(req.url==='/favicon.ico'){res.writeHead(204);res.end();return}const file=path.resolve(root,'.'+decodeURIComponent(req.url.split('?')[0]));if(!file.startsWith(root+path.sep))throw Error('Invalid path');const data=await fs.readFile(file);res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.glb':'model/gltf-binary','.png':'image/png'})[path.extname(file)]||'application/octet-stream');res.end(data)}catch{res.writeHead(404);res.end()}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
- const b=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',...(process.env.HTTPS_PROXY?{proxy:{server:process.env.HTTPS_PROXY,bypass:'127.0.0.1,localhost'}}:{}),args:['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader',...(process.env.CHROMIUM_ANGLE_BACKEND?['--use-gl=angle','--use-angle='+process.env.CHROMIUM_ANGLE_BACKEND]:[])]});
+ const b=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',...(process.env.HTTPS_PROXY?{proxy:{server:process.env.HTTPS_PROXY,bypass:'127.0.0.1,localhost'}}:{}),args:['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader']});
  try{const p=await b.newPage({viewport});const errors=[];p.on('pageerror',e=>errors.push(e.message));
  await p.route('**/index.html',async route=>{let html=await fs.readFile(path.join(root,'index.html'),'utf8');const marker='player.reset(new V3(0, 0, 11), 0);\nbot.reset';assert(html.includes(marker),'Test hook insertion point exists');html=html.replace(marker,hook+marker);await route.fulfill({contentType:'text/html',body:html})});
- await p.goto(`http://127.0.0.1:${server.address().port}/index.html`);await p.waitForFunction(()=>!!window.__warriorTest,{timeout:90000});await callback(p,errors);
+ await p.goto(`http://127.0.0.1:${server.address().port}/index.html`);await p.waitForFunction(()=>!!window.__warriorTest,null,{timeout:90000});await callback(p,errors);
  }finally{await b.close();await new Promise(resolve=>server.close(resolve))}
 }
 async function run(){await withGame(async(p,errors)=>{
