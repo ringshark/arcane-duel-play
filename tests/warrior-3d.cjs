@@ -28,6 +28,16 @@ async function run(){await withGame(async(p,errors)=>{
   check(!!f.avatar3D&&!f.billboard.visible,'3D skinned warrior replaces billboard');
   check(f.avatar3D.clips.size===26,'all 26 corrected clips load');
   check(f.shield3D.userData.meshy,'textured 3D shield replaces image-derived shield');
+  const shieldContact=()=>{
+   const a=f.avatar3D,v=f.forward(),shoulder=a.bones.mixamorig_LeftArm.getWorldPosition(v.clone()),
+    elbow=a.bones.mixamorig_LeftForeArm.getWorldPosition(v.clone()),hand=a.bones.mixamorig_LeftHand.getWorldPosition(v.clone()),
+    grip=f.shield3D.localToWorld(f.shield3D.userData.grip.clone());
+   return hand.distanceTo(grip)<.002 && shoulder.distanceTo(hand)<(shoulder.distanceTo(elbow)+elbow.distanceTo(hand))*.98;
+  };
+  const shoulder=f.root.worldToLocal(f.avatar3D.bones.mixamorig_LeftArm.getWorldPosition(f.forward())),
+   elbow=f.root.worldToLocal(f.avatar3D.bones.mixamorig_LeftForeArm.getWorldPosition(f.forward()));
+  check(f.shield3D.position.x<0 && elbow.x<shoulder.x,'idle shield and elbow stay on the left side instead of crossing the chest');
+  check(shieldContact(),'idle wrist reaches the rear grip with a bent elbow');
   const y=f.root.position.y,z=f.root.position.z;
   g.tick(.5,g.input(0,-1));check(f.root.position.z<z-.1&&f.avatar3D.current.clip.name==='Walking','forward input moves physics and plays locomotion');
   g.reset();g.tick(.5,g.input(-1,0));check(f.avatar3D.current.clip.name==='Great_Sword_Strafe_Left','sideways movement uses a strafe clip');
@@ -38,6 +48,13 @@ async function run(){await withGame(async(p,errors)=>{
   }
   check(f.avatar3D.current.clip.name==='Idle','combo recovers to idle');
   g.reset();g.tick(.4,g.input(0,0,{block:'staff'}));check(f.blockType==='guard'&&f.shieldUpK>.9,'guard raises the 3D shield');
+  check(shieldContact(),'raised shield stays attached to the hand');
+  check(f.root.worldToLocal(f.avatar3D.bones.mixamorig_RightHand.getWorldPosition(f.forward())).x>.1,'shield guard leaves the sword hand on its own side');
+  for(const [x,y] of [[-1,-1],[-1,1],[1,-1],[1,1]]){
+   f.shieldAim.x=x;f.shieldAim.y=y;g.tick(.3,g.input(0,0,{block:'staff'}));
+   check(shieldContact(),`shield steering ${x},${y} stays within arm reach`);
+  }
+  f.shieldAim.x=0;f.shieldAim.y=0;g.tick(.3,g.input(0,0,{block:'staff'}));
   const before=f.shield3D.getWorldDirection(f.forward().clone());f.shieldAim.x=.8;g.tick(.3,g.input(0,0,{block:'staff'}));
   const after=f.shield3D.getWorldDirection(f.forward().clone());check(before.distanceTo(after)>.1,'shield steering turns the real blocking surface');
   g.bot.root.position.copy(f.root.position).addScaledVector(after,2);g.bot.root.position.y=f.root.position.y;
@@ -48,8 +65,9 @@ async function run(){await withGame(async(p,errors)=>{
   check(f.toggleGear('shield')===null,'shield stowing starts');g.tick(g.CFG.gear.time+.1);check(!f.hasShield,'stowed shield no longer blocks');
   g.reset();g.tick(.3,g.input(0,0,{jump:true}));check(f.root.position.y>y+.2,'jump retains physical height');g.tick(1.5);check(f.onGround,'jump lands');
   g.reset();g.tick(.2);const standing=f.avatar3D.hips.position.y;g.tick(.6,g.input(0,0,{crouch:true}));check(f.avatar3D.hips.position.y<standing-.4&&f.avatar3D.root.scale.y===1,'crouch bends the skeleton without flattening the model');
+  check(shieldContact(),'crouching keeps the shield grip attached');
   g.reset();g.tick(.15,g.input(0,-1,{roll:true}));check(f.rolling&&Math.abs(f.avatar3D.pivot.rotation.x)>.1,'roll retains motion and a full-body rotation');g.tick(.6);check(!f.rolling&&f.avatar3D.pivot.rotation.x===0,'roll recovers cleanly');
-  for(const skill of ['bash','charge','warCry','whirlwind','throwAxe']){g.reset();g.tick(.1);check(f.useSkill(skill)===null,skill+' activates');g.tick(Math.min(.15,g.CFG[skill].time*.3));check(!!f.skill&&!!f.avatar3D.current,skill+' has a 3D pose');}
+  for(const skill of ['bash','charge','warCry','whirlwind','throwAxe']){g.reset();g.tick(.1);check(f.useSkill(skill)===null,skill+' activates');g.tick(Math.min(.15,g.CFG[skill].time*.3));check(!!f.skill&&!!f.avatar3D.current,skill+' has a 3D pose');check(shieldContact(),skill+' keeps the shield attached to the hand');}
   g.reset();g.tick(.1);f.dead=true;g.tick(.5);check(f.avatar3D.current.clip.name==='Dying','death uses the skinned death clip');g.reset();g.tick(.2);check(f.avatar3D.current.clip.name==='Idle'&&!f.dead,'restart resets the animation mixer');
   g.setClass('sorceress');g.reset();g.tick(.2);check(!f.avatar3D&&f.billboard.visible,'sorceress keeps her existing appearance');g.setClass('warrior');g.reset();g.tick(.2);check(!!f.avatar3D&&!f.billboard.visible,'class switching restores one 3D warrior');
   g.bot.setArt(f.art);g.bot.animate(.1,0);check(!!g.bot.avatar3D&&g.bot.avatar3D.bones.mixamorig_Hips!==f.avatar3D.bones.mixamorig_Hips,'opponent warrior uses an independent skeleton');g.setDummyMode(false);check(g.bot.avatar3D.root.visible,'opponent mesh visible outside training');g.setDummyMode(true);check(!g.bot.avatar3D.root.visible,'training dummy hides the opponent avatar');

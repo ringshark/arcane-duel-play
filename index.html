@@ -3054,8 +3054,13 @@ function updateShield3D(c, V, dt) {
   const bashing = c.skill && c.skill.id === 'bash' ? Math.sin(Math.min(1, c.skill.t / CFG.bash.time * 2) * Math.PI) : 0;
   // poses: [position, facing direction] in his local frame
   // at rest: held at his side facing forward (wolf face toward the enemy, edge-on from the side), like the renders
-  const rest = [new V3(0.56, 1.02, -0.22), new V3(0.18, 0, -1)];
-  const up = [new V3(0.08 + A.x * 0.42, 1.25 + A.y * 0.38, -0.62 - bashing * 0.35), new V3(Math.sin(A.x * 0.6), A.y * 0.45, -Math.cos(A.x * 0.6))];
+  // The skinned warrior carries the shield in his left hand. The old billboard
+  // used the opposite side, and its raised position is beyond this rig's reach.
+  const rest = s.userData.meshy
+    ? [new V3(-0.40, 1.10, -0.22), new V3(-0.18, 0, -1)]
+    : [new V3(0.56, 1.02, -0.22), new V3(0.18, 0, -1)];
+  const up = [new V3((s.userData.meshy ? -0.10 : 0.08) + A.x * 0.42, 1.25 + A.y * 0.38,
+    s.userData.meshy ? -0.43 - bashing * 0.18 : -0.62 - bashing * 0.35), new V3(Math.sin(A.x * 0.6), A.y * 0.45, -Math.cos(A.x * 0.6))];
   const back = [new V3(0, 1.22, 0.3), new V3(0, 0, 1)];
   const pos = rest[0].clone().lerp(up[0], k).lerp(back[0], sb);
   const dir = rest[1].clone().lerp(up[1], k).lerp(back[1], sb).normalize();

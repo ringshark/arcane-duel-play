@@ -51,6 +51,11 @@ rolling is procedural because there is no authored roll clip in the supplied
 library. The shield's existing aiming/blocking logic is retained, with arm IK
 to reach the 3D shield. Sheathed equipment is shown on the character's back.
 
+The shield sits on the rig's left side, with a rear grip target and an outward
+elbow bend. Its steering position is limited to the arm's reach. Guard uses an
+upright base pose and shield-arm IK; the supplied two-handed greatsword block
+does not fit this sword-and-shield loadout.
+
 The new GLB assets total approximately 28 MB and load once at startup. Serve
 all files in `assets/warrior/` with the app. The current Three.js/CDN setup
 requires Internet access, as before.

@@ -104,7 +104,9 @@ export class WarriorAvatar {
     const box=new THREE.Box3().setFromObject(model), size=box.getSize(new THREE.Vector3()), center=box.getCenter(new THREE.Vector3());
     const scale=0.76/Math.max(size.x,size.y); model.scale.setScalar(scale); model.position.copy(center).multiplyScalar(-scale); group.add(model);
     const mats=[]; model.traverse(n=>{if(n.isMesh)for(const m of Array.isArray(n.material)?n.material:[n.material])mats.push(m);});
-    group.userData={art:this.owner.art,mats,meshy:true}; this.owner.root.add(group); return group;
+    // Wrist sits behind and just above the horizontal grip, not inside the disc.
+    group.userData={art:this.owner.art,mats,meshy:true,grip:new THREE.Vector3(0,0.055,-0.075)};
+    this.owner.root.add(group); return group;
   }
   update(dt, cfg) {
     const c=this.owner, speed=Math.hypot(c.vel.x,c.vel.z);
@@ -119,7 +121,11 @@ export class WarriorAvatar {
       name={bash:'Standing_Block_React_Large',whirlwind:'Standing_Melee_Attack_360_High',throwAxe:'Sword_And_Shield_Attack_High',charge:'Running',warCry:'Idle'}[c.skill.id];
       token=`skill:${c.skill.id}:${this.skillSerial}`;
       if(!['charge','warCry'].includes(c.skill.id))progress=Math.min(1,c.skill.t/cfg[c.skill.id].time);
-    } else if(c.blockType==='guard'){name='Great_Sword_Blocking';token='guard';}
+    } else if(c.blockType==='guard'){
+      // The supplied blocking clip is a two-handed greatsword pose. Use the
+      // upright base with the left-arm shield solver for this one-handed loadout.
+      name='Idle';token='guard';
+    }
     else if(speed>0.3){
       const forward=c.forward(), along=c.vel.dot(forward), side=c.vel.x*Math.cos(c.yaw)-c.vel.z*Math.sin(c.yaw);
       name=Math.abs(side)>Math.abs(along)*1.3 ? (side<0?'Great_Sword_Strafe_Left':'Great_Sword_Strafe_Right') : speed>6.2?'Running':'Walking';
@@ -152,8 +158,26 @@ export class WarriorAvatar {
     this.swordGrip.visible=c.swordOut && !(c.gear?.item==='sword');
     this.backSword.visible=!this.swordGrip.visible;
     if(c.shield3D && c.hasShield && !c.dead){
-      const target=c.shield3D.getWorldPosition(new THREE.Vector3()), pole=new THREE.Vector3(1,0,-0.3).applyQuaternion(c.root.getWorldQuaternion(new THREE.Quaternion()));
-      reach(this.bones.mixamorig_LeftArm,this.bones.mixamorig_LeftForeArm,this.bones.mixamorig_LeftHand,target,pole);
+      const shield=c.shield3D, upper=this.bones.mixamorig_LeftArm,
+        lower=this.bones.mixamorig_LeftForeArm, hand=this.bones.mixamorig_LeftHand;
+      const shoulder=upper.getWorldPosition(new THREE.Vector3()), elbow=lower.getWorldPosition(new THREE.Vector3()), wrist=hand.getWorldPosition(new THREE.Vector3());
+      const target=shield.localToWorld(shield.userData.grip.clone());
+      // Mouse steering and crouching can request an unreachable pose. Move the
+      // shield with the grip so the arm keeps a slight bend and never separates.
+      const offset=target.clone().sub(shoulder), maxReach=(shoulder.distanceTo(elbow)+elbow.distanceTo(wrist))*0.96;
+      if(offset.length()>maxReach){
+        const correction=shoulder.clone().add(offset.setLength(maxReach)).sub(target);
+        const center=shield.getWorldPosition(new THREE.Vector3()).add(correction);
+        shield.position.copy(shield.parent.worldToLocal(center));
+        target.add(correction);shield.updateWorldMatrix(false,true);
+      }
+      const pole=new THREE.Vector3(-1,-0.5,0.35).applyQuaternion(c.root.getWorldQuaternion(new THREE.Quaternion()));
+      reach(upper,lower,hand,target,pole);
+      // Preserve the wrist's grip orientation when the elbow solver turns the
+      // forearm: the fingers point down along the rear face of the shield.
+      const fingers=this.bones.mixamorig_LeftHandMiddle1;
+      const down=new THREE.Vector3(0,-1,0).applyQuaternion(shield.getWorldQuaternion(new THREE.Quaternion()));
+      aimBone(hand,fingers.getWorldPosition(new THREE.Vector3()).sub(hand.getWorldPosition(new THREE.Vector3())),down);
     }
     const f=THREE.MathUtils.clamp(c.flashT/0.18,0,1);
     for(const [mat,color] of this.materials)mat.color.copy(color).multiply(new THREE.Color(1,1-f*0.65,1-f*0.65));
