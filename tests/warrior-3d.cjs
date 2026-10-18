@@ -7,7 +7,7 @@ const hook=`const _warriorOriginalCamera=updateCamera;window.__warriorTest={play
  input:(x,z,options={})=>({move:new V3(x,0,z),jump:false,roll:false,...options}),
  tick:(seconds,input=NO_INPUT)=>{for(let left=seconds;left>1e-8;){const dt=Math.min(1/120,left);time+=dt;player.step(dt,input);player.animate(dt,time);left-=dt}},
  inspect:()=>{updateCamera=()=>{camera.fov=50;camera.updateProjectionMatrix();const p=player.root.position;camera.position.set(p.x+3,p.y+2.4,p.z-4.5);camera.lookAt(p.x,p.y+1.5,p.z)}},
- control:(code,on)=>{locked=true;if(on)onPress(code);else onRelease(code)},
+ control:(code,on)=>{locked=true;const wasPaused=paused;paused=false;if(on)onPress(code);else onRelease(code);paused=wasPaused},
  normalCamera:()=>{updateCamera=_warriorOriginalCamera;camera.fov=70;camera.updateProjectionMatrix()},
  renderStep:dt=>{update(dt);updateCamera();updateHUD();renderer.render(scene,camera)}
 };\n`;
