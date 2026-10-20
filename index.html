@@ -81,6 +81,7 @@
   #nameplate div { height: 6px; background: rgba(0,0,0,.6); margin-top: 2px; border-radius: 3px; overflow: hidden; }
   #nameplate i { display: block; height: 100%; background: #8a7bff; }
 
+  #flashOverlay { position: absolute; inset: 0; background: #fff; opacity: 0; }
   #vignette { position: absolute; inset: 0; box-shadow: inset 0 0 160px 40px rgba(255,0,0,.8); opacity: 0; }
   #floaters { position: absolute; inset: 0; }
   .floater { position: absolute; left: 0; top: 0; font-weight: 900; font-size: 22px; text-shadow: 0 2px 3px #000, 0 0 6px #000; white-space: nowrap; }
@@ -105,6 +106,7 @@
   .slot .energy { position: absolute; left: 6px; right: 6px; bottom: 5px; height: 4px; background: rgba(0,0,0,.6); border-radius: 2px; overflow: hidden; }
   .slot .energy i { display: block; height: 100%; width: 100%; background: #66ccff; }
   #crosshair.free i, #crosshair.free b { background: #ffd66b; }
+  #crosshair.enemy i, #crosshair.enemy b { background: #ff3b3b; }
   .floater.blocked { color: #8fd8ff; font-size: 14px; letter-spacing: 1px; }
   #overlay .panel { text-align: center; max-width: 560px; max-height: 94vh; overflow-y: auto; box-sizing: border-box; padding: 32px 40px; background: rgba(20,14,40,.85); border: 2px solid rgba(160,130,255,.4); border-radius: 12px; }
   #overlay h1 { margin: 0 0 6px; font-size: 48px; letter-spacing: 3px; text-shadow: 0 0 18px #7a5cff; }
@@ -116,7 +118,7 @@
   @keyframes pulse { 50% { opacity: .45; } }
 
   /* Class select */
-  #overlay .panel.wide { max-width: 940px; }
+  #overlay .panel.wide { max-width: 1150px; }
   #overlay .playing-as { color: #ffd66b; font-weight: 700; }
   .classes { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin: 18px 0 10px; }
   .ccard { position: relative; width: 196px; padding: 12px 10px 14px; background: rgba(255,255,255,.04); border: 2px solid rgba(160,130,255,.3); border-radius: 12px; cursor: pointer; text-align: center; transition: transform .12s, border-color .12s, box-shadow .12s; }
@@ -135,17 +137,21 @@
   .ccard .soon { position: absolute; top: 10px; right: 10px; font-size: 10px; font-weight: 800; letter-spacing: 1px; color: #fff; background: rgba(90,70,160,.9); padding: 2px 7px; border-radius: 4px; }
   .kit { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 4px auto 0; max-width: 760px; }
   .kit span { font-size: 12.5px; padding: 4px 9px; border-radius: 6px; background: rgba(122,92,255,.18); border: 1px solid rgba(160,130,255,.35); color: #e4dcff; }
+  .duel-code { font-size: 18px; letter-spacing: 3px; color: #ffd66b; }
   #classNote { min-height: 18px; color: #ffb4b4; font-size: 13px; margin-top: 6px; }
 </style>
 <script src="sorceress-art.js"></script>
 <script src="class-art.js"></script>
 <script src="warrior-art.js"></script>
+<script src="sorceress3d-model.js"></script>
+<script src="sorceress3d-rig.js"></script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
 </script>
 </head>
 <body>
 <div id="hud">
+  <div id="flashOverlay"></div>
   <div class="bar-wrap left"><div class="name">YOU</div>
     <div class="bar"><div id="php" class="fill"></div><span id="phpTxt"></span></div>
     <div class="bar sm"><div id="pmp" class="fill mana"></div><span id="pmpTxt"></span></div>
@@ -176,6 +182,8 @@
     <div class="slot" data-spell="warCry" style="display:none"><span class="key">3</span><span class="icon">📯</span><span class="label">War Cry</span><div class="cd"></div><div class="cdText"></div></div>
     <div class="slot" data-spell="whirlwind" style="display:none"><span class="key">4</span><span class="icon">🌪️</span><span class="label">Whirlwind</span><div class="cd"></div><div class="cdText"></div></div>
     <div class="slot" data-spell="throwAxe" style="display:none"><span class="key">Q</span><span class="icon">🪓</span><span class="label">Throw Axe</span><div class="cd"></div><div class="cdText"></div></div>
+    <div class="slot" data-spell="aimedShot" style="display:none"><span class="key">1</span><span class="icon">🎯</span><span class="label">Aimed Shot</span><div class="cd"></div><div class="cdText"></div></div>
+    <div class="slot" data-spell="disengage" style="display:none"><span class="key">2</span><span class="icon">💨</span><span class="label">Disengage</span><div class="cd"></div><div class="cdText"></div></div>
     <div class="slot" data-spell="gearSword" style="display:none"><span class="key">Y</span><span class="icon">🗡️</span><span class="label">Sheathe</span><div class="cd"></div><div class="cdText"></div></div>
     <div class="slot" data-spell="gearShield" style="display:none"><span class="key">U</span><span class="icon">🛡️</span><span class="label">Stow</span><div class="cd"></div><div class="cdText"></div></div>
   </div>
@@ -191,7 +199,9 @@
 
 <script type="module">
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { WarriorAvatar, loadWarriorAssets } from './warrior-3d.js';
+import { RangerAvatar, loadRangerAssets } from './ranger-3d.js';
 
 // ============================================================
 // CONFIG — tweak balance here
@@ -226,15 +236,15 @@ const CFG = {
   headMultiplier: 2,
   // Staff: one big 2s overhand swing — wind-up, a tense pause, a fast strike (hits at hitAt), then recovery
   staff:     { min: 10, max: 10, cooldown: 2.0, range: 4.2, swingTime: 2.0, windUp: 1.0, hold: 0.15, strike: 0.25, hitAt: 1.33 },
-  // Teleport: hold the key 3s, release to blink 10m in the direction you face. Released early = fizzles.
-  teleport:  { castTime: 3.0, distance: 10, cooldown: 30, mana: 10, color: 0xc77dff, name: 'Teleport' },
+  // Teleport: hold the key 1s, release to blink 10m in the direction you face. Released early = fizzles.
+  teleport:  { castTime: 1.0, distance: 10, cooldown: 30, mana: 10, color: 0xc77dff, name: 'Teleport' },
   fireball:  { castTime: 2.0, min: 20, max: 30, cooldown: 1.0, mana: 10, speed: 70, color: 0xff6a1a, name: 'Fireball' },
   lightning: { castTime: 2.0, min: 28, max: 38, cooldown: 4.0, mana: 10, color: 0xcfeaff, name: 'Lightning' },
   heal:      { castTime: 1.5, min: 30, max: 45, cooldown: 8.0, mana: 10, color: 0x55ff88, name: 'Heal' },
   // Shield spell: instant cast, translucent circle in front of the caster
   shield:    { duration: 1.5, cooldown: 20, mana: 15, reduction: 0.95, color: 0x66ccff, name: 'Shield' },
   // Clone: instant. A copy appears beside the caster for 5s, moving opposite to her and copying everything else she does
-  clone:     { duration: 5, cooldown: 60, mana: 20, color: 0x9a8cff, name: 'Clone' },
+  clone:     { duration: 5, cooldown: 60, mana: 10, color: 0x9a8cff, name: 'Clone' },
   // Warrior's shield (hold Block): stops any frontal attack, physical or magic, down to 1 damage.
   // Every block costs it 5 of its 100 hit points — the 20th block breaks it for the rest of the round.
   warShield: { hp: 100, costPerBlock: 5, damageTaken: 1 },
@@ -251,6 +261,11 @@ const CFG = {
   warCry:    { name: 'War Cry',     stamina: 10, cooldown: 25, time: 0.6,  buff: 6, damageMult: 1.3, radius: 8, slow: 3, slowMult: 0.6 },
   whirlwind: { name: 'Whirlwind',   stamina: 25, cooldown: 10, time: 1.2,  ticks: [0.2, 0.6, 1.0], radius: 3.6, min: 6, max: 8, moveMult: 0.6 },
   throwAxe:  { name: 'Throw Axe',   stamina: 10, cooldown: 6,  time: 0.45, releaseAt: 0.22, speed: 32, gravity: 6, min: 15, max: 22 },
+  // Ranger (bow). Quick Shot: a fast loose on LMB/F. Aimed Shot: drawn like a spell (key 1), loosed with LMB.
+  // Disengage: a leap backwards out of reach. Arrows fly at `speed` m/s; headshots double as usual.
+  quickShot: { name: 'Quick Shot',  stamina: 3,  cooldown: 0.9, time: 0.7,  releaseAt: 0.32, min: 9, max: 12, speed: 70 },
+  aimedShot: { name: 'Aimed Shot',  castTime: 1.2, mana: 0, cooldown: 5, min: 24, max: 32, speed: 95, color: 0xffe2a0 },
+  disengage: { name: 'Disengage',   stamina: 15, cooldown: 7,  time: 0.5,  push: 26, hop: 4.5 },
   block: {
     moveMult: 0.5,             // move speed while staff-blocking
     staffMin: 0.30, staffMax: 0.60,   // staff blocks 30–60% of damage
@@ -262,9 +277,14 @@ const CFG = {
   refreshPotion: { perRound: 3 },   // restores stamina to full
   // Explosion potion: shake it up (fuse starts), then it's thrown — explodes on hitting a character/pillar/wall or when the fuse runs out
   explosivePotion: { perRound: 2, shakeTime: 1.0, fuse: 5, min: 30, max: 40, tiles: 5, minThrow: 3, maxThrow: 24, gravity: 18 },
+  // Flash bang: a quick shake, then thrown — bursts into blinding white light on impact or after its short fuse.
+  // Anyone within `radius` m who can see it is blinded for up to `blind` s (less if they're looking away) — including you
+  flashPotion: { perRound: 2, shakeTime: 0.5, fuse: 1.6, radius: 16, blind: 3.5, minThrow: 3, maxThrow: 24, gravity: 18 },
   potionDrinkTime: 1.0,             // seconds to drink any potion
   potionCooldown: 15,               // seconds before the same kind of potion can be drunk again
 };
+// Potions that get thrown rather than drunk, and their throw / fuse settings
+const THROWN = { explosive: CFG.explosivePotion, flash: CFG.flashPotion };
 
 const V3 = THREE.Vector3;
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -557,6 +577,54 @@ function updateProjectiles(dt) {
   }
 }
 
+// Arrows (Ranger): fly straight and fast to where the shot was aimed (the hit is decided when it's loosed, like a
+// fireball). On a fighter they strike with a thud; otherwise they stick in the floor or a pillar for a few seconds.
+const arrows = [];
+const arrowParts = (() => {
+  const shaft = new THREE.CylinderGeometry(0.012, 0.012, 0.85, 5).rotateX(Math.PI / 2).translate(0, 0, -0.45);
+  const head = new THREE.ConeGeometry(0.032, 0.11, 6).rotateX(Math.PI / 2);
+  const fletch = new THREE.PlaneGeometry(0.05, 0.13).rotateX(Math.PI / 2).translate(0, 0, -0.8);
+  return {
+    shaft, head, fletch,
+    wood: new THREE.MeshStandardMaterial({ color: 0x8a6a40, roughness: 0.8 }),
+    steel: new THREE.MeshStandardMaterial({ color: 0xb8bec8, metalness: 0.7, roughness: 0.35 }),
+    feather: new THREE.MeshStandardMaterial({ color: 0xc23a2a, roughness: 0.9, side: THREE.DoubleSide }),
+  };
+})();
+function makeArrow() {
+  const g = new THREE.Group(), P = arrowParts;
+  g.add(new THREE.Mesh(P.shaft, P.wood), new THREE.Mesh(P.head, P.steel));
+  const f1 = new THREE.Mesh(P.fletch, P.feather), f2 = f1.clone(); f2.rotation.z = Math.PI / 2; g.add(f1, f2);
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+function launchArrow(from, to, onArrive, hit = false, speed = 80, heavy = false) {
+  const m = makeArrow(); m.position.copy(from); m.lookAt(to); scene.add(m);
+  arrows.push({ m, from: from.clone(), to: to.clone(), t: 0, dur: Math.max(0.02, from.distanceTo(to) / speed), onArrive, hit, heavy, stuck: 0 });
+  playBowShot(from, heavy);
+}
+function updateArrows(dt) {
+  for (let i = arrows.length - 1; i >= 0; i--) {
+    const a = arrows[i];
+    if (a.stuck > 0) { a.stuck -= dt; if (a.stuck <= 0) { scene.remove(a.m); arrows.splice(i, 1); } continue; }
+    a.t += dt;
+    const k = Math.min(1, a.t / a.dur);
+    a.m.position.lerpVectors(a.from, a.to, k);
+    if (a.heavy && Math.random() < 0.7) spawnParticle({ pos: a.m.position.clone(), color: 0xfff2c0, life: 0.25, size: 0.18, endSize: 0.02, opacity: 0.7 });
+    if (k < 1) continue;
+    if (a.onArrive) a.onArrive();
+    if (a.hit) { burst(a.to, 0xffffff, a.heavy ? 16 : 8, 4, 0.25, 0.3, 3); playArrowHit(a.to, true); scene.remove(a.m); arrows.splice(i, 1); }
+    else { a.stuck = 3; burst(a.to, 0xd8d0c0, 6, 2.5, 0.18, 0.3, 4); playArrowHit(a.to, false); }   // bites into the floor / a pillar
+  }
+}
+// A Ranger shot leaves the bow: the bow's follow-through starts, and the arrow deals its damage when it arrives
+function loose(char, from, res, dmg, heavy = false) {
+  char.recoilT = heavy ? 0.5 : 0.35;
+  launchArrow(from, res.point, () => {
+    if (res.target) dealDamage(res.target, dmg, res.part === 'head', res.point, char);
+  }, !!res.target, CFG[heavy ? 'aimedShot' : 'quickShot'].speed, heavy);
+}
+
 // Lightning bolts
 const bolts = [];
 function jaggedPath(from, to, ampScale) {
@@ -665,7 +733,7 @@ function updateBolts(dt) {
 // ============================================================
 const HB_MAT_BODY = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true, visible: false });
 const HB_MAT_HEAD = new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true, visible: false });
-const SPELL_COLORS = { fireball: new THREE.Color(CFG.fireball.color), lightning: new THREE.Color(CFG.lightning.color), heal: new THREE.Color(CFG.heal.color), teleport: new THREE.Color(CFG.teleport.color) };
+const SPELL_COLORS = { fireball: new THREE.Color(CFG.fireball.color), lightning: new THREE.Color(CFG.lightning.color), heal: new THREE.Color(CFG.heal.color), teleport: new THREE.Color(CFG.teleport.color), aimedShot: new THREE.Color(CFG.aimedShot.color) };
 
 // Landmarks measured on each 1600x1600 render (pixels). Four real views of the same mage:
 // front (straight on), back (from behind), left (facing screen-left), right (facing screen-right).
@@ -1213,6 +1281,11 @@ class Sorceress {
     if (this.shield3D) { this.root.remove(this.shield3D); this.shield3D = null; }   // rebuilt for the new class if it carries one
     if (this.views) for (const k in this.views) this.inner.remove(this.views[k].mesh);
     this.views = {};
+    if (this.rig) { this.root.remove(this.rig.group); this.rig = null; }
+    // a rigged 3D model (Sorceress 3D) stands in the world itself instead of the flat, camera-facing pictures
+    if (art.rig) { this.rig = SorceressRig.create(THREE, art); this.root.add(this.rig.group); return; }
+    // the Ranger is only a rigged 3D model (Meshy archer); its avatar moves with the controller like the warrior's
+    if (art.ranger) { this.avatar3D = new RangerAvatar(this, RANGER_ASSETS); this.avatar3D.root.visible = !this.dummy?.visible; this.billboard.visible = false; this.view = 'front'; return; }
     for (const key of Object.keys(art)) {
       const v = art[key];
       // view group (feet at its origin) → upper body hinged at the waist (bottom edge), lower body hinged at the waist (top edge), legs
@@ -1307,7 +1380,7 @@ class Sorceress {
     this.onGround = true; this.rolling = false; this.rollT = 0; this.rollCd = 0;
     this.swingT = -1; this.swingHit = false;
     this.casting = null; this.charged = null;
-    this.cooldowns = { fireball: 0, heal: 0, lightning: 0, shield: 0, teleport: 0, clone: 0, bash: 0, charge: 0, warCry: 0, whirlwind: 0, throwAxe: 0 };
+    this.cooldowns = { fireball: 0, heal: 0, lightning: 0, shield: 0, teleport: 0, clone: 0, bash: 0, charge: 0, warCry: 0, whirlwind: 0, throwAxe: 0, quickShot: 0, aimedShot: 0, disengage: 0 };
     this.skill = null;                                            // warrior skill in progress { id, t, ... }
     this.swingType = null; this.comboStep = 0; this.lastSwingAt = -99; this.comboStart = -99;   // warrior sword combo
     this.swordTotal = 0;                                          // weapon angle (shoulder + wrist)
@@ -1315,7 +1388,9 @@ class Sorceress {
     this.aimPitch = 0;                                            // where he's looking (raised shield follows it)
     this.stunT = 0; this.slowT = 0; this.warCryT = 0;             // status effects
     this.knock = new V3();                                        // knockback velocity (decays)
-    this.potionCd = { heal: 0, mana: 0, refresh: 0, explosive: 0 }; this.drinking = null;
+    this.potionCd = { heal: 0, mana: 0, refresh: 0, explosive: 0, flash: 0 }; this.drinking = null;
+    this.blindT = 0;                                              // blinded by a flash bang (s left)
+    this.recoilT = 0;                                             // Ranger: follow-through after a shot (s left)
     this.shieldHP = CFG.warShield.hp; this.shieldBroken = false; this.shieldUpK = 0;   // warrior's shield
     this.swordOut = true; this.shieldOut = true; this.gear = null;                     // warrior's gear in hand / put away
     if (this.views) for (const k in this.views) if (this.views[k].shieldNode) this.views[k].shieldNode.visible = true;
@@ -1330,13 +1405,14 @@ class Sorceress {
 
   headPos(out = new V3()) { return this.headHB.getWorldPosition(out); }
   chestPos(out = new V3()) { return this.chestAnchor.getWorldPosition(out); }
-  orbPos(out = new V3()) { return (this.avatar3D ? this.avatar3D.tip : this.views[this.view].orbAnchor).getWorldPosition(out); }
+  orbPos(out = new V3()) { return (this.rig ? this.rig.tip : this.avatar3D ? this.avatar3D.tip : this.views[this.view].orbAnchor).getWorldPosition(out); }
   forward(out = new V3()) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
   get busy() { return this.dead || this.rolling || this.swingT >= 0 || !!this.blockType || !!this.skill || this.stunT > 0; }
   // Warrior skills (1-4, Q). Returns an error message, or null when it started.
   useSkill(id) {
     const C = CFG[id];
-    if (!this.isWarrior || this.dead) return 'Only the Warrior can do that';
+    const own = this.isWarrior ? WARRIOR_SKILLS : this.isRanger ? RANGER_SKILLS : [];
+    if (!own.includes(id) || this.dead) return RANGER_SKILLS.includes(id) ? 'Only the Ranger can do that' : 'Only the Warrior can do that';
     if (this.stunT > 0) return 'You are stunned';
     if (this.gear) return `Busy ${gearVerb(this.gear)} your ${this.gear.item}`;
     if (this.skill) return `Already using ${CFG[this.skill.id].name}`;
@@ -1391,12 +1467,7 @@ class Sorceress {
       if (d < m) { const nx = d > 1e-4 ? dx / d : 1, nz = d > 1e-4 ? dz / d : 0; pos.x = o.x + nx * m; pos.z = o.z + nz * m; }
     }
     this.vel.x = this.vel.z = 0;
-    // effects: burst where she left, burst where she lands, sparkle trail between
-    const up = new V3(0, 1, 0);
-    for (const p of [from.clone().add(up), pos.clone().add(up)]) { burst(p, c.color, 30, 5, 0.45, 0.5, 0); flash(p, c.color, 40, 0.35); }
-    smokePuff(from, 18); smokePuff(pos, 14);   // a little smoke left where she vanished and where she appears
-    playTeleportSound(from, pos);
-    for (let i = 0; i <= 20; i++) spawnParticle({ pos: new V3().lerpVectors(from, pos, i / 20).add(new V3(0, rand(0.4, 1.6), 0)), color: c.color, life: rand(0.3, 0.6), size: 0.3, endSize: 0.02 });
+    teleportFx(from, pos.clone());
     return true;
   }
 
@@ -1421,13 +1492,16 @@ class Sorceress {
   }
   startSwing() {
     if (this.isWarrior) return this.swordSwing();
+    if (this.isRanger) return !this.useSkill('quickShot');   // the Ranger's "swing" is a quick bow shot
     if (this.busy) return false;   // swinging doesn't interrupt a spell being cast
     if (this.swingCd > 0 || this.gear || !this.swordReady) return false;
     this.swingT = 0; this.swingHit = false; this.swooshed = false; this.swingCd = CFG.staff.cooldown; return true;
   }
   cancel() { this.casting = null; this.charged = null; }
   // Warrior = the class whose art has a shield piece
-  get isWarrior() { return !!(this.art && this.art.front.shield); }
+  get isWarrior() { return !!(this.art && this.art.front && this.art.front.shield); }
+  // Ranger = the class played by the 3D archer (it has no flat art at all)
+  get isRanger() { return !!(this.art && this.art.ranger); }
   // His shield, if it's in one piece and on his arm (not on his back / mid-swap)
   get hasShield() { return this.isWarrior && !this.shieldBroken && this.shieldOut && !(this.gear && this.gear.item === 'shield'); }
   // Sword in hand and ready (always true for the sorceress's staff)
@@ -1472,6 +1546,8 @@ class Sorceress {
     }
 
     this.shieldT = this.dead ? 0 : Math.max(0, this.shieldT - dt);
+    this.blindT = Math.max(0, this.blindT - dt);
+    this.recoilT = Math.max(0, (this.recoilT || 0) - dt);   // Ranger: the bow's follow-through after an arrow leaves
     this.shieldHitT = Math.max(0, this.shieldHitT - dt);
 
     // Staff block (held). Raising it interrupts a cast in progress; a charged spell is kept.
@@ -1519,6 +1595,7 @@ class Sorceress {
       if (this.slowT > 0) sp *= CFG.warCry.slowMult;                                   // frightened by a war cry
       if (this.skill && this.skill.id === 'whirlwind') sp *= CFG.whirlwind.moveMult;   // can drift while spinning
       if (this.skill && (this.skill.id === 'bash' || this.skill.id === 'throwAxe' || this.skill.id === 'warCry')) sp *= 0.3;
+      if (this.skill && this.skill.id === 'quickShot') sp *= 0.6;   // walking while loosing an arrow
       // Speed depends on direction relative to facing: forward 100%, backwards 50%, sideways 70%
       const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw), rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
       let f = input.move.x * fx + input.move.z * fz, s = input.move.x * rx + input.move.z * rz;
@@ -1581,7 +1658,7 @@ class Sorceress {
     if (this.avatar3D) {
       const bashing = this.skill?.id === 'bash';
       this.shieldUpK += ((this.blockType === 'guard' || bashing ? 1 : 0) - this.shieldUpK) * Math.min(1, dt * (bashing ? 30 : 14));
-      updateShield3D(this, { shieldArm: null }, dt);
+      if (this.isWarrior) updateShield3D(this, { shieldArm: null }, dt);
       this.avatar3D.update(dt, CFG);
       this.hb.scale.y = (this.rolling ? 0.55 : 1) * (1 - 0.5 * this.crouchK);
       this.hb.position.y = 0;
@@ -1590,6 +1667,15 @@ class Sorceress {
       if (this.swingT >= 0 && !this.swooshed) { this.swooshed = true; playSwoosh(this.orbPos()); }
       return;
     }
+    if (this.rig) {   // rigged 3D model: the bones are posed from her state; hitboxes squat / duck with her as usual
+      SorceressRig.pose(THREE, this.rig, this, CFG, dt, time);
+      this.hb.scale.y = (this.rolling ? 0.55 : 1) * (1 - 0.5 * this.crouchK);
+      this.root.updateMatrixWorld(true);
+    } else this.animateViews(dt, time);
+    this.animateEffects(time);
+  }
+  // Flat figure: turn the pictures to the camera, pick the matching view and move its pieces
+  animateViews(dt, time) {
     const pos = this.root.position;
     const hs = Math.hypot(this.vel.x, this.vel.z);
     if (this.onGround && !this.rolling && hs > 0.3) this.walkPhase += dt * hs * 2.0;
@@ -1687,7 +1773,7 @@ class Sorceress {
 
     // Body motion: walk bob + sway, jump stretch, swing lean, roll cartwheel, death fall
     let tilt = Math.sin(this.walkPhase) * 0.05 * amp, sx = 1, sy = 1;
-    if (this.drinking && this.drinking.kind === 'explosive') tilt += Math.sin(time * 55) * 0.045 + Math.sin(time * 37) * 0.025;   // shaking the potion up
+    if (this.drinking && THROWN[this.drinking.kind]) tilt += Math.sin(time * 55) * 0.045 + Math.sin(time * 37) * 0.025;   // shaking the potion up
     this.inner.position.y = -0.9 + Math.abs(Math.sin(this.walkPhase)) * 0.07 * amp * (1 - 0.6 * this.crouchK);
     if (!this.onGround) { const v = clamp(this.vel.y / CFG.jumpVel, -1, 1); sy = 1 + v * 0.06; sx = 1 - v * 0.04; }
     // Staff: big overhand swing — slow wind-up raising it back, a tense pause, a fast heavy strike, then recovery
@@ -1810,7 +1896,9 @@ class Sorceress {
     this.hb.scale.y = (this.rolling ? 0.55 : 1) * (1 - 0.5 * this.crouchK);   // squatting halves head + body hitbox height
     this.hb.position.y = 0;
     this.root.updateMatrixWorld(true);
-
+  }
+  // Staff-tip glow, spell hum, water shield, swing trail and hit flash (flat and 3D figures alike)
+  animateEffects(time) {
     // Orb glow / charging colors
     const op = this.orbPos();
     let col = this.orbBase.clone(), scale = 1, glowOpacity = 1;
@@ -1883,7 +1971,10 @@ const NO_INPUT = { move: new V3(), jump: false, roll: false };
 const CLASS_VIEWS = {
   sorceress: await buildArt(ART, window.SORCERESS_ART),
   warrior: await buildArt(WARRIOR, window.WARRIOR_ART),
+  // rigged 3D model (skeleton + skin weights built when the game loads)
+  sorceress3d: await SorceressRig.prepare(THREE, GLTFLoader, window.SORCERESS3D_GLB, FIGURE_H),
 };
+CLASS_VIEWS.sorceress3d.portrait = SorceressRig.portrait(THREE, CLASS_VIEWS.sorceress3d);
 const WARRIOR_ASSETS = await loadWarriorAssets(renderer).catch(error => {
   const panel = document.getElementById('overlayPanel');
   panel.textContent = 'The 3D warrior could not load. Serve this folder over HTTP and check the asset requests, then reload.';
@@ -1892,6 +1983,13 @@ const WARRIOR_ASSETS = await loadWarriorAssets(renderer).catch(error => {
 });
 const warriorFill = new THREE.DirectionalLight(0xbccfff, 0.65);
 warriorFill.position.set(-8, 6, -10); scene.add(warriorFill);
+const RANGER_ASSETS = await loadRangerAssets(renderer, WARRIOR_ASSETS).catch(error => {
+  const panel = document.getElementById('overlayPanel');
+  panel.textContent = 'The 3D ranger could not load. Serve this folder over HTTP and check the asset requests, then reload.';
+  document.getElementById('overlay').style.display = 'grid';
+  throw error;
+});
+CLASS_VIEWS.ranger = { ranger: true };   // played by the 3D model only (see RangerAvatar)
 const ART_VIEWS = CLASS_VIEWS.sorceress;
 CFG.crouch.drop = FIGURE_H * 0.5;   // squatting halves her height
 const player = new Sorceress({ name: 'You', orb: 0x4fd8ff, art: ART_VIEWS });
@@ -2107,6 +2205,8 @@ function fireSpell(char, spell) {
     launchFireball(start, res.point, () => {
       if (res.target) dealDamage(res.target, randInt(cfg.min, cfg.max), res.part === 'head', res.point, char);
     }, !!res.target);
+  } else if (spell === 'aimedShot') {
+    loose(char, start, res, randInt(cfg.min, cfg.max), true);
   } else if (spell === 'lightning') {
     lightningBolt(start, res.point, !!res.target);
     if (res.target) dealDamage(res.target, randInt(cfg.min, cfg.max), res.part === 'head', res.point, char);
@@ -2155,7 +2255,7 @@ function onSwingStrike(char) {
 // ============================================================
 // WARRIOR SKILLS — Shield Bash, Charge, War Cry, Whirlwind, Throw Axe
 // ============================================================
-function stun(target, t) {
+function stun(target, t, attacker) {
   if (target.dead) return;
   if (target.stunT <= 0) popText(target.headPos().add(new V3(0, 0.5, 0)), 'STUNNED', 'tag');
   target.stunT = Math.max(target.stunT, t);
@@ -2167,10 +2267,38 @@ function inFrontOf(c, o, range, cone) {
   return d <= range && (d < 1e-3 || to.normalize().dot(c.forward()) >= cone);
 }
 // Called the moment a skill starts
+// Bow loosing: a short string twang (deeper and louder for a fully drawn Aimed Shot) with a whip of air
+function playBowShot(pos, heavy = false) {
+  const ac = audio(); if (!ac) return;
+  const t = ac.currentTime + 0.005, out = spatialOut(ac, pos, heavy ? 1.0 : 0.75);
+  const o = ac.createOscillator(), og = ac.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(heavy ? 150 : 210, t); o.frequency.exponentialRampToValueAtTime(heavy ? 70 : 110, t + 0.18);
+  og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.7, t + 0.004); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+  o.connect(og); og.connect(out.g); o.start(t); o.stop(t + 0.27);
+  const n = noiseSource(ac), bp = ac.createBiquadFilter(), ng = ac.createGain();
+  bp.type = 'bandpass'; bp.Q.value = 0.8; bp.frequency.setValueAtTime(2400, t); bp.frequency.exponentialRampToValueAtTime(700, t + 0.2);
+  ng.gain.setValueAtTime(0.0001, t); ng.gain.exponentialRampToValueAtTime(0.35, t + 0.01); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  n.connect(bp); bp.connect(ng); ng.connect(out.g); n.start(t); n.stop(t + 0.25);
+}
+// Arrow landing: a dull thud in a fighter, a dry wooden knock in stone
+function playArrowHit(pos, flesh) {
+  const ac = audio(); if (!ac) return;
+  const t = ac.currentTime + 0.005, out = spatialOut(ac, pos, 0.8);
+  const n = noiseSource(ac), lp = ac.createBiquadFilter(), ng = ac.createGain();
+  lp.type = flesh ? 'lowpass' : 'bandpass'; lp.frequency.value = flesh ? 500 : 1800; lp.Q.value = flesh ? 0.7 : 3;
+  ng.gain.setValueAtTime(0.0001, t); ng.gain.exponentialRampToValueAtTime(flesh ? 1.0 : 0.6, t + 0.004); ng.gain.exponentialRampToValueAtTime(0.0001, t + (flesh ? 0.14 : 0.09));
+  n.connect(lp); lp.connect(ng); ng.connect(out.g); n.start(t); n.stop(t + 0.2);
+}
+
 function startSkillFx(c, id) {
   const C = CFG[id], pos = c.root.position, opp = opponentOf(c), S = CFG.avatarScale;
   if (id === 'bash') { c.knock.addScaledVector(c.skill.dir, C.lunge); playSwoosh(c.chestPos()); }
   if (id === 'charge') { playChargeSound(c); smokePuff(pos, 8, 0x8a7a68); }
+  if (id === 'disengage') {   // Ranger leaps back out of reach
+    knockBack(c, c.forward().multiplyScalar(-C.push), true);
+    c.vel.y = C.hop; c.onGround = false;
+    smokePuff(pos, 10, 0x8a7a68); playSwoosh(c.chestPos());
+  }
   if (id === 'warCry') {
     c.warCryT = C.buff;
     popText(c.headPos().add(new V3(0, 0.6, 0)), 'WAR CRY', 'tag');
@@ -2179,8 +2307,7 @@ function startSkillFx(c, id) {
     for (let i = 0; i < 30; i++) spawnParticle({ pos: c.chestPos(), vel: randDir().multiplyScalar(rand(3, 7)).setY(rand(0, 2)), color: 0xff6a3a, life: rand(0.4, 0.8), size: 0.4, endSize: 0.05 });
     playWarCry(c.headPos());
     if (!opp.dead && opp.root.position.distanceTo(pos) <= C.radius * S) {
-      opp.slowT = Math.max(opp.slowT, C.slow);
-      popText(opp.headPos().add(new V3(0, 0.5, 0)), 'SLOWED', 'blocked');
+      slowFor(opp, C.slow, c);
     }
   }
   if (id === 'throwAxe') playSwoosh(c.chestPos());
@@ -2194,8 +2321,8 @@ function stepSkill(c, dt) {
     if (!opp.dead && inFrontOf(c, opp, C.range * S, 0.35)) {
       const pt = opp.chestPos();
       dealDamage(opp, randInt(C.min, C.max), false, pt, c);
-      stun(opp, C.stun);
-      opp.knock.addScaledVector(c.forward(), 6);
+      stun(opp, C.stun, c);
+      knockBack(opp, c.forward().multiplyScalar(6), false, c);
       playBashHit(pt);
       burst(pt, 0xffe2b0, 18, 5, 0.35, 0.35, 3);
     }
@@ -2208,8 +2335,8 @@ function stepSkill(c, dt) {
       s.done = true;
       const pt = opp.chestPos();
       dealDamage(opp, randInt(C.min, C.max), false, pt, c);
-      stun(opp, C.stun);
-      opp.knock.copy(s.dir).multiplyScalar(C.knock);
+      stun(opp, C.stun, c);
+      knockBack(opp, s.dir.clone().multiplyScalar(C.knock), true, c);
       c.vel.x *= 0.15; c.vel.z *= 0.15;
       playBashHit(pt); smokePuff(opp.root.position, 10, 0x8a7a68);
       burst(pt, 0xffe2b0, 20, 6, 0.35, 0.4, 3);
@@ -2228,6 +2355,11 @@ function stepSkill(c, dt) {
     });
   }
   if (s.id === 'throwAxe' && !s.done && s.t >= C.releaseAt) { s.done = true; launchAxe(c); }
+  if (s.id === 'quickShot' && !s.done && s.t >= C.releaseAt) {   // the arrow leaves at the crosshair
+    s.done = true;
+    const { origin, dir, near } = aimRay(c);
+    loose(c, c.orbPos(), resolveShot(origin, dir, CFG.spellRange, c, near), randInt(C.min, C.max));
+  }
   if (s.t >= C.time) c.skill = null;
 }
 
@@ -2253,8 +2385,12 @@ function launchAxe(c) {
   const target = resolveShot(origin, dir, 80, c, near).point;
   const T = start.distanceTo(target) / CFG.throwAxe.speed;
   target.y += 0.5 * CFG.throwAxe.gravity * T * T;
+  const vel = target.sub(start).normalize().multiplyScalar(CFG.throwAxe.speed);
+  spawnAxe(c, start, vel);
+}
+function spawnAxe(c, start, vel) {
   const m = makeAxe(); m.position.copy(start); scene.add(m);
-  axes.push({ m, vel: target.sub(start).normalize().multiplyScalar(CFG.throwAxe.speed), owner: c, life: 4, stuck: false, spin: 0 });
+  axes.push({ m, vel, owner: c, life: 4, stuck: false, spin: 0 });
   playAxeThrow(start);
 }
 function clearAxes() { for (const a of axes) scene.remove(a.m); axes.length = 0; }
@@ -2329,6 +2465,15 @@ function groundRing(pos, radius, color) {
 function swordClang(pt, onStone = false) {
   playSwordClang(pt, onStone);
   for (let i = 0; i < (onStone ? 14 : 10); i++) spawnParticle({ pos: pt.clone(), vel: randDir().multiplyScalar(rand(2, 6)).add(new V3(0, 1.5, 0)), color: Math.random() < 0.5 ? 0xfff0b0 : 0xffb050, life: rand(0.2, 0.45), size: 0.12, endSize: 0.02, gravity: 14 });
+}
+
+// Teleport: burst where she left, burst where she lands, sparkle trail between
+function teleportFx(from, pos) {
+  const c = CFG.teleport, up = new V3(0, 1, 0);
+  for (const p of [from.clone().add(up), pos.clone().add(up)]) { burst(p, c.color, 30, 5, 0.45, 0.5, 0); flash(p, c.color, 40, 0.35); }
+  smokePuff(from, 18); smokePuff(pos, 14);   // a little smoke left where she vanished and where she appears
+  playTeleportSound(from, pos);
+  for (let i = 0; i <= 20; i++) spawnParticle({ pos: new V3().lerpVectors(from, pos, i / 20).add(new V3(0, rand(0.4, 1.6), 0)), color: c.color, life: rand(0.3, 0.6), size: 0.3, endSize: 0.02 });
 }
 
 function onHealed(char, amount, actual) {
@@ -2670,6 +2815,7 @@ const BOTTLE_TINTS = {
   mana: { glass: 0xa8d4ff, glassGlow: 0x001a3a, dregs: 0x2a7bff, dregsGlow: 0x0a2a6a },
   refresh: { glass: 0xffb0a8, glassGlow: 0x3a0505, dregs: 0xe0201a, dregsGlow: 0x5a0808 },
   explosive: { glass: 0xd6a8ff, glassGlow: 0x2a0a4a, dregs: 0x9a2bff, dregsGlow: 0x5a10a0 },
+  flash: { glass: 0xf4f6ff, glassGlow: 0x30343c, dregs: 0xffffff, dregsGlow: 0x8a8f99 },
 };
 // Little glass bottle: body, shoulder, neck, cork. Tinted glass with a few drops left in it.
 function makeBottle(kind) {
@@ -2787,6 +2933,12 @@ const POTIONS = {
     blocked: () => null,
     apply: (c, d) => throwExplosive(c, d),
   },
+  flash: {
+    name: 'Flash Bang', color: '#ffffff', verb: 'Shaking', thrown: true,
+    time: () => CFG.flashPotion.shakeTime,
+    blocked: () => null,
+    apply: (c, d) => throwExplosive(c, d),
+  },
 };
 
 // Drinking takes CFG.potionDrinkTime; the effect lands and the bottle drops when it's done.
@@ -2806,10 +2958,10 @@ const potionTime = kind => POTIONS[kind].time ? POTIONS[kind].time() : CFG.potio
 function updatePotions(char, dt) {
   for (const k in char.potionCd) char.potionCd[k] = Math.max(0, char.potionCd[k] - dt);
   const d = char.drinking; if (!d) return;
-  if (d.kind === 'explosive') shakeExplosive(char, d, dt);
+  if (THROWN[d.kind]) shakeExplosive(char, d, dt);
   if (char.dead) {
     char.drinking = null;
-    if (d.kind === 'explosive') throwExplosive(char, d, true);   // dies holding a lit potion: it drops at her feet
+    if (THROWN[d.kind]) throwExplosive(char, d, true);   // dies holding a lit potion: it drops at her feet
     return;
   }
   d.t += dt;
@@ -2817,7 +2969,9 @@ function updatePotions(char, dt) {
   char.drinking = null;
   POTIONS[d.kind].apply(char, d);
   char.potionCd[d.kind] = CFG.potionCooldown;
-  if (!POTIONS[d.kind].thrown) dropBottle(char, d.kind);
+  if (!POTIONS[d.kind].thrown) {
+    dropBottle(char, d.kind);
+  }
   if (d.onDone) d.onDone();
 }
 
@@ -2855,8 +3009,8 @@ const explosives = [];
 // While shaking: a purple bottle jitters in her free hand, bubbling, and the fizz sound starts (the fuse is already burning)
 function shakeExplosive(char, d, dt) {
   if (!d.held) {
-    d.held = makeBottle('explosive'); scene.add(d.held);
-    d.fuse = CFG.explosivePotion.fuse;
+    d.held = makeBottle(d.kind); scene.add(d.held);
+    d.fuse = THROWN[d.kind].fuse;
     d.sound = startFizzSound(handPos(char), d.fuse);
   }
   d.fuse -= dt;
@@ -2864,12 +3018,12 @@ function shakeExplosive(char, d, dt) {
   d.held.position.copy(p);
   d.held.rotation.set(Math.sin(d.t * 50) * 0.5, d.t * 3, Math.cos(d.t * 43) * 0.5);
   if (d.sound) d.sound.update(p);
-  if (Math.random() < 0.5) spawnParticle({ pos: p.clone().add(new V3(0, 0.45, 0)), vel: new V3(rand(-0.3, 0.3), rand(0.6, 1.4), rand(-0.3, 0.3)), color: 0xb060ff, life: 0.4, size: 0.15, endSize: 0.02 });
+  if (Math.random() < 0.5) spawnParticle({ pos: p.clone().add(new V3(0, 0.45, 0)), vel: new V3(rand(-0.3, 0.3), rand(0.6, 1.4), rand(-0.3, 0.3)), color: d.kind === 'flash' ? 0xffffff : 0xb060ff, life: 0.4, size: 0.15, endSize: 0.02 });
 }
 // Throw it along the camera/aim direction; how far depends on how high the crosshair is
 function throwExplosive(char, d, drop = false) {
   if (!d.held) shakeExplosive(char, d, 0);
-  const E = CFG.explosivePotion, m = d.held, from = m.position.clone();
+  const E = THROWN[d.kind], m = d.held, from = m.position.clone();
   let vel = new V3();
   if (!drop) {
     const { dir } = aimRay(char);
@@ -2881,7 +3035,7 @@ function throwExplosive(char, d, drop = false) {
     const speed = Math.sqrt(E.gravity * dist / Math.sin(2 * ang));
     vel = flat.multiplyScalar(speed * Math.cos(ang)).add(new V3(0, speed * Math.sin(ang), 0));
   }
-  explosives.push({ m, vel, fuse: d.fuse, owner: char, age: 0, sound: d.sound, marker: makeBlastMarker(), spin: new V3(rand(-12, 12), rand(-6, 6), rand(-12, 12)), rolling: false });
+  explosives.push({ m, vel, fuse: d.fuse, owner: char, age: 0, kind: d.kind, sound: d.sound, marker: d.kind === 'explosive' ? makeBlastMarker() : null, spin: new V3(rand(-12, 12), rand(-6, 6), rand(-12, 12)), rolling: false });
   d.held = null; d.sound = null;
 }
 function clearExplosives() {
@@ -2893,9 +3047,8 @@ function clearExplosives() {
   }
 }
 function updateExplosives(dt) {
-  const E = CFG.explosivePotion;
   for (let i = explosives.length - 1; i >= 0; i--) {
-    const e = explosives[i], m = e.m, p = m.position;
+    const e = explosives[i], m = e.m, p = m.position, E = THROWN[e.kind || 'explosive'];
     e.age += dt; e.fuse -= dt;
     let boom = e.fuse <= 0;
     if (!boom) {
@@ -2927,19 +3080,69 @@ function updateExplosives(dt) {
       if (e.rolling) m.rotateY(Math.hypot(e.vel.x, e.vel.z) * dt / BOTTLE_R);
     }
     // warning grid follows the tile block it would blow up, pulsing faster as the fuse runs out
-    const sq = blastSquare(p);
-    e.marker.position.set(sq.cx, 0.03, sq.cz);
-    e.marker.material.opacity = 0.45 + 0.4 * Math.sin(e.age * (6 + 14 * (1 - Math.max(0, e.fuse) / E.fuse)));
+    if (e.marker) {
+      const sq = blastSquare(p);
+      e.marker.position.set(sq.cx, 0.03, sq.cz);
+      e.marker.material.opacity = 0.45 + 0.4 * Math.sin(e.age * (6 + 14 * (1 - Math.max(0, e.fuse) / E.fuse)));
+    }
     if (e.sound) e.sound.update(p);
-    if (Math.random() < 0.6) spawnParticle({ pos: p.clone().add(new V3(0, 0.2, 0)), vel: new V3(rand(-0.3, 0.3), rand(0.5, 1.2), rand(-0.3, 0.3)), color: 0xb060ff, life: 0.45, size: 0.15, endSize: 0.02 });
+    if (Math.random() < 0.6) spawnParticle({ pos: p.clone().add(new V3(0, 0.2, 0)), vel: new V3(rand(-0.3, 0.3), rand(0.5, 1.2), rand(-0.3, 0.3)), color: e.kind === 'flash' ? 0xffffff : 0xb060ff, life: 0.45, size: 0.15, endSize: 0.02 });
     if (boom) {
       if (e.sound) e.sound.stop();
-      scene.remove(m); scene.remove(e.marker); e.marker.geometry.dispose(); e.marker.material.dispose();
+      scene.remove(m);
+      if (e.marker) { scene.remove(e.marker); e.marker.geometry.dispose(); e.marker.material.dispose(); }
       explosives.splice(i, 1);
-      explodePotion(p.clone(), e.owner);
+      if (e.kind === 'flash') flashBang(p.clone(), e.owner); else explodePotion(p.clone(), e.owner);
     }
   }
 }
+// Flash bang: a burst of blinding white light. Anyone who can see it is blinded: fully when they're looking at it,
+// less when it's off to the side, barely when it went off behind them; distance and pillars in the way count too.
+// Online, each page judges only its own player (their page decides for them).
+function flashBang(pos, owner) {
+  const F = CFG.flashPotion, c0 = pos.clone().setY(Math.max(pos.y, 0.4));
+  flash(c0, 0xffffff, 600, 0.5);
+  burst(c0, 0xffffff, 80, 16, 0.9, 0.5, 0);
+  burst(c0, 0xfff6d0, 30, 6, 1.6, 0.35, 0);
+  for (let i = 0; i < 14; i++) spawnParticle({ pos: c0.clone().add(randDir().multiplyScalar(0.4)), vel: randDir().multiplyScalar(1.2).add(new V3(0, 1.2, 0)), color: 0xcfd2da, life: rand(0.9, 1.5), size: 0.9, endSize: 2.0, opacity: 0.45, smoke: true });
+  playFlashBang(c0);
+  for (const c of [player, bot]) {
+    if (c.dead) continue;
+    const eye = c.headPos(), to = c0.clone().sub(eye), dist = to.length();
+    if (dist > F.radius || !hasLOS(eye, c0)) continue;
+    to.normalize();
+    const look = c === player ? camForward.clone().normalize() : c.forward();   // you see what the camera sees
+    const dot = look.dot(to);
+    const facing = dot > 0.5 ? 1 : dot > 0 ? 0.6 + 0.8 * dot : dot > -0.5 ? 0.35 : 0.15;
+    const t = F.blind * facing * (1 - 0.4 * dist / F.radius);
+    if (t < 0.3) continue;
+    c.blindT = Math.max(c.blindT, t); c.blindMax = c.blindT;
+    if (c === player) playEarRinging(t);
+    else popText(c.headPos().add(new V3(0, 0.5, 0)), 'BLINDED', 'tag');
+  }
+}
+// Flash bang going off: a sharp crack with a bright fizz on top
+function playFlashBang(pos) {
+  const ac = audio(); if (!ac) return;
+  const t = ac.currentTime + 0.005, out = spatialOut(ac, pos, 1.2);
+  const n = noiseSource(ac), hp = ac.createBiquadFilter(), ng = ac.createGain();
+  hp.type = 'highpass'; hp.frequency.value = 900;
+  ng.gain.setValueAtTime(0.0001, t); ng.gain.exponentialRampToValueAtTime(1.4, t + 0.004); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+  n.connect(hp); hp.connect(ng); ng.connect(out.g); n.start(t); n.stop(t + 0.4);
+  const o = ac.createOscillator(), og = ac.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.25);
+  og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.9, t + 0.005); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+  o.connect(og); og.connect(out.g); o.start(t); o.stop(t + 0.32);
+}
+// Your ears ringing while you're blinded: a thin high tone fading out
+function playEarRinging(dur) {
+  const ac = audio(); if (!ac) return;
+  const t = ac.currentTime + 0.05, g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.07, t + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.6);
+  g.connect(sfxBus);
+  [3150, 3190].forEach(f => { const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(g); o.start(t); o.stop(t + dur + 0.7); });
+}
+
 // The blast: everyone standing in the 5x5 tile block takes damage (the thrower too)
 function explodePotion(pos, owner) {
   const E = CFG.explosivePotion, sq = blastSquare(pos);
@@ -3270,7 +3473,7 @@ function blockReduction(target, attacker) {
 
 function dealDamage(target, amount, isHead, point, attacker) {
   if (target.dead || state !== 'playing') return;
-  let dmg = isHead ? amount * CFG.headMultiplier : amount;
+  let dmg = isHead ? amount * CFG.headMultiplier : amount, blockText = '';
   if (attacker && attacker.warCryT > 0) dmg = Math.round(dmg * CFG.warCry.damageMult);   // war cry: hits harder
   const blk = blockReduction(target, attacker);
   if (blk && blk.type === 'guard') {
@@ -3278,14 +3481,14 @@ function dealDamage(target, amount, isHead, point, attacker) {
     dmg = CFG.warShield.damageTaken;
     target.shieldHP = Math.max(0, target.shieldHP - CFG.warShield.costPerBlock);
     const sp = shieldWorldPos(target);
-    popText(sp.clone().add(new V3(0, 0.6, 0)), 'BLOCKED', 'blocked');
+    popText(sp.clone().add(new V3(0, 0.6, 0)), blockText = 'BLOCKED', 'blocked');
     for (let i = 0; i < 14; i++) spawnParticle({ pos: sp.clone().add(randDir().multiplyScalar(0.2)), vel: randDir().multiplyScalar(rand(1.5, 4)).add(new V3(0, 1.5, 0)), color: Math.random() < 0.6 ? 0x8a6038 : 0xd8d8e0, life: rand(0.3, 0.6), size: rand(0.08, 0.16), endSize: 0.03, gravity: 12, smoke: true });
     burst(sp, 0xffe2b0, 10, 4, 0.3, 0.25, 0);
     if (target.shieldHP <= 0) breakShield(target); else playShieldBlock(sp);
   } else if (blk) {
     const raw = dmg;
     dmg = Math.max(0, Math.round(raw * (1 - blk.r)));
-    popText(point.clone().add(new V3(0, 0.7, 0)), blk.type === 'shield' ? 'SHIELDED' : `PARRIED ${Math.round(blk.r * 100)}%`, 'blocked');
+    popText(point.clone().add(new V3(0, 0.7, 0)), blockText = blk.type === 'shield' ? 'SHIELDED' : `PARRIED ${Math.round(blk.r * 100)}%`, 'blocked');
     if (blk.type === 'shield') {
       // the water swallows the hit: ripple, splash of droplets, absorb sound
       target.shieldHitT = 0.25;
@@ -3332,8 +3535,13 @@ function updateBot(dt) {
   const to = player.root.position.clone().sub(bot.root.position); to.y = 0;
   const dist = to.length() || 0.001; const dirTo = to.clone().divideScalar(dist);
   if (testMode) return input;   // the dummy just stands there
-  if (!bot.dead) bot.yaw = lerpAngle(bot.yaw, Math.atan2(-to.x, -to.z), Math.min(1, dt * 8));
+  if (!bot.dead && bot.blindT <= 0) bot.yaw = lerpAngle(bot.yaw, Math.atan2(-to.x, -to.z), Math.min(1, dt * 8));
   if (bot.dead || player.dead || state !== 'playing' || !botEnabled) return input;
+  if (bot.blindT > 0) {   // blinded by a flash bang: stumbles about, can't aim or attack
+    bot.yaw += Math.sin(time * 1.7) * dt * 1.5;
+    input.move.set(Math.sin(time * 1.3), 0, Math.cos(time * 0.9)).multiplyScalar(0.5);
+    return input;
+  }
 
   brain.strafeT -= dt; brain.jumpT -= dt; brain.dodgeT -= dt;
   if (brain.strafeT <= 0) { brain.strafeDir = Math.random() < 0.7 ? -brain.strafeDir : brain.strafeDir; brain.strafeT = rand(0.8, 2.5); brain.wantDist = rand(7, 14); }
@@ -3387,6 +3595,13 @@ function updateBot(dt) {
 }
 
 // ============================================================
+// Knockback / slow from a skill
+function knockBack(target, v, set) { if (set) target.knock.copy(v); else target.knock.add(v); }
+function slowFor(target, t) {
+  target.slowT = Math.max(target.slowT, t);
+  popText(target.headPos().add(new V3(0, 0.5, 0)), 'SLOWED', 'blocked');
+}
+
 // INPUT / CAMERA
 // ============================================================
 // Every rebindable action: [id, label shown in settings, default input code]
@@ -3416,6 +3631,8 @@ const ACTIONS = [
   ['warCry', 'Warrior: War Cry', 'Digit3'],
   ['whirlwind', 'Warrior: Whirlwind', 'Digit4'],
   ['throwAxe', 'Warrior: Throw Axe', 'KeyQ'],
+  ['aimedShot', 'Ranger: Aimed Shot', 'Digit1'],
+  ['disengage', 'Ranger: Disengage', 'Digit2'],
   ...['Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'KeyZ', 'KeyX', 'KeyV', 'KeyG']
     .map((code, i) => [`item${i + 1}`, `Use quick slot ${i + 1}`, code]),
   ['crouch', 'Crouch (hold)', 'KeyC'],
@@ -3429,10 +3646,16 @@ const STORE_KEY = 'arcaneDuel.settings.v1';
 // Playable classes. Every class has its own skills/spells (`skills` = the action ids it can use);
 // potions (the quick bar) are the only thing all classes share. Locked classes show as coming soon.
 const WARRIOR_SKILLS = ['bash', 'charge', 'warCry', 'whirlwind', 'throwAxe'];
-const CLASS_SKILL_ACTIONS = ['fireball', 'heal', 'lightning', 'teleport', 'shield', 'clone', 'attack', 'cancel', 'melee', 'staffBlock', 'shieldUp', 'swordGear', 'shieldGear', ...WARRIOR_SKILLS];
+const RANGER_SKILLS = ['quickShot', 'disengage'];   // used through useSkill (Aimed Shot is drawn like a spell)
+const CLASS_SKILL_ACTIONS = ['fireball', 'heal', 'lightning', 'teleport', 'shield', 'clone', 'attack', 'cancel', 'melee', 'staffBlock', 'shieldUp', 'swordGear', 'shieldGear', ...WARRIOR_SKILLS, 'aimedShot', 'disengage'];
 const CLASSES = [
   { id: 'sorceress', name: 'Sorceress', role: 'Battle mage', available: true,
     desc: 'Hurls fire and lightning from range, heals herself, blinks across the arena and fights up close with her staff.',
+    skills: ['fireball', 'heal', 'lightning', 'teleport', 'shield', 'clone', 'attack', 'cancel', 'melee', 'staffBlock'],
+    kit: ['Fireball', 'Lightning', 'Heal', 'Teleport', 'Water Shield', 'Clone', 'Staff Swing', 'Staff Block', 'Potions'] },
+  // same kit as the Sorceress (base = the class whose controls/skills it shares), different look
+  { id: 'sorceress3d', base: 'sorceress', name: 'Sorceress 3D', role: 'Hooded battle mage', available: true,
+    desc: 'A hooded wanderer with a feathered staff. Fights exactly like the Sorceress: fire, lightning, healing, teleport and her staff.',
     skills: ['fireball', 'heal', 'lightning', 'teleport', 'shield', 'clone', 'attack', 'cancel', 'melee', 'staffBlock'],
     kit: ['Fireball', 'Lightning', 'Heal', 'Teleport', 'Water Shield', 'Clone', 'Staff Swing', 'Staff Block', 'Potions'] },
   { id: 'archmage', name: 'Archmage', role: 'Elder spellcaster', available: false,
@@ -3441,8 +3664,10 @@ const CLASSES = [
     desc: 'A hardened brawler who closes the distance, blocks with his shield and cuts down foes up close.',
     skills: ['attack', 'melee', 'shieldUp', 'staffBlock', 'swordGear', 'shieldGear', ...WARRIOR_SKILLS],
     kit: ['Shield Bash', 'Charge', 'War Cry', 'Whirlwind', 'Throw Axe', 'Sword Swing', 'Shield Block (100 HP shield)', 'Sheathe / Draw Sword', 'Shield on Back / Ready', 'Potions'] },
-  { id: 'ranger', name: 'Ranger', role: 'Archer', available: false,
-    desc: 'A swift hunter who strikes from afar with bow and arrow, then slips out of reach.' },
+  { id: 'ranger', name: 'Ranger', role: 'Archer', available: true,
+    desc: 'A swift hunter who strikes from afar with bow and arrow, then slips out of reach.',
+    skills: ['attack', 'melee', 'aimedShot', 'disengage', 'cancel'],
+    kit: ['Quick Shot', 'Aimed Shot', 'Disengage', 'Potions'] },
 ];
 let selectedClass = 'sorceress';
 let binds = { ...DEFAULT_BINDS };
@@ -3509,7 +3734,16 @@ function onPress(code) {
     if (!classHas(a)) continue;   // another class's skill
     if (a === 'jump') jumpQueued = true;
     if (a === 'roll') { rollQueued = true; if (player.stamina < CFG.stamina.rollCost) toast(`Not enough stamina (roll costs ${CFG.stamina.rollCost})`); }
-    if (a === 'fireball' || a === 'heal' || a === 'lightning' || a === 'teleport') tryCast(a);
+    if (a === 'fireball' || a === 'heal' || a === 'lightning' || a === 'teleport' || a === 'aimedShot') tryCast(a);
+    // Ranger: F, or the left mouse button when no Aimed Shot is drawn, looses a quick arrow; key 2 leaps back
+    const drawing = player.casting && player.casting.spell === 'aimedShot';
+    if (player.isRanger && drawing && (a === 'melee' || a === 'attack')) continue;   // still drawing the Aimed Shot: wait for it
+    if (player.isRanger && (a === 'melee' || (a === 'attack' && !player.charged))) {
+      const err = player.useSkill('quickShot');
+      if (err && !/cooldown|Already/.test(err)) toast(err);
+      continue;
+    }
+    if (a === 'disengage') { const err = player.useSkill(a); if (err) { toast(err); denySlot(a); } }
     // staff swing (F) — or for the warrior, a sword swing on F or the left mouse button
     if (a === 'melee' || (a === 'attack' && player.isWarrior)) {
       if (player.startSwing()) cloneDo(player, c => c.startSwing());
@@ -3736,6 +3970,7 @@ const HEAL_POTION_ICON = potionIcon('rgba(255,240,190,.35)', '#fff3c4', '#ffd21f
 const MANA_POTION_ICON = potionIcon('rgba(190,220,255,.35)', '#d4e8ff', '#2a7bff', '#cfe6ff');   // blue
 const REFRESH_POTION_ICON = potionIcon('rgba(255,200,195,.35)', '#ffd6d0', '#e0201a', '#ffd0c8');   // red
 const EXPLOSIVE_POTION_ICON = potionIcon('rgba(220,190,255,.35)', '#e6d0ff', '#9a2bff', '#f0d8ff');   // purple
+const FLASH_POTION_ICON = potionIcon('rgba(255,255,255,.55)', '#ffffff', '#f2f5ff', '#ffffff');   // white
 function stockQuickItems() {
   quickItems.fill(null);
   const t = `${CFG.potionDrinkTime}s to drink, ${CFG.potionCooldown}s cooldown`;
@@ -3744,6 +3979,8 @@ function stockQuickItems() {
   quickItems[2] = { potion: 'refresh', icon: REFRESH_POTION_ICON, name: `Refresh Potion — restores stamina to full (${t})`, count: CFG.refreshPotion.perRound };
   const E = CFG.explosivePotion;
   quickItems[3] = { potion: 'explosive', icon: EXPLOSIVE_POTION_ICON, name: `Explosion Potion — shake (${E.shakeTime}s) and throw; explodes on impact or after ${E.fuse}s, ${E.min}–${E.max} dmg in a ${E.tiles}x${E.tiles} tile area. Crosshair height sets the throw distance (${CFG.potionCooldown}s cooldown)`, count: E.perRound };
+  const F = CFG.flashPotion;
+  quickItems[4] = { potion: 'flash', icon: FLASH_POTION_ICON, name: `Flash Bang — shake (${F.shakeTime}s) and throw; bursts on impact or after ${F.fuse}s and blinds anyone within ${F.radius}m who can see it for up to ${F.blind}s (you too — look away!) (${CFG.potionCooldown}s cooldown)`, count: F.perRound };
   renderQuickItems();
 }
 stockQuickItems();
@@ -3760,7 +3997,7 @@ function updateHUD() {
   }
   $('npFill').style.width = (bot.hp / CFG.maxHp * 100) + '%';
   // Warrior: shield durability
-  const hasShieldArt = !!player.art.front.shield;
+  const hasShieldArt = !!(player.art.front && player.art.front.shield);
   $('pshWrap').style.display = hasShieldArt ? '' : 'none';
   if (hasShieldArt) {
     $('psh').style.width = (player.shieldHP / CFG.warShield.hp * 100) + '%';
@@ -3768,16 +4005,27 @@ function updateHUD() {
     $('pshTxt').textContent = player.shieldBroken ? 'Shield BROKEN' : `Shield ${player.shieldHP} / ${CFG.warShield.hp}`;
   }
 
-  for (const s of ['fireball', 'heal', 'lightning', 'teleport']) {
+  for (const s of ['fireball', 'heal', 'lightning', 'teleport', 'aimedShot']) {
     const cd = player.cooldowns[s], sl = slotEls[s];
     sl.cd.style.height = cd > 0 ? (cd / CFG[s].cooldown * 100) + '%' : '0%';
     sl.txt.textContent = cd > 0 ? cd.toFixed(1) : '';
     sl.el.classList.toggle('active', (player.casting && player.casting.spell === s) || player.charged === s);
   }
   const st = slotEls.staff;
-  st.cd.style.height = (player.swingCd / CFG.staff.cooldown * 100) + '%';
-  st.txt.textContent = player.swingCd > 0 ? player.swingCd.toFixed(1) : '';
-  st.el.classList.toggle('active', player.swingT >= 0);
+  if (player.isRanger) {   // the staff slot is the Ranger's Quick Shot
+    const qc = player.cooldowns.quickShot;
+    st.cd.style.height = (qc / CFG.quickShot.cooldown * 100) + '%';
+    st.txt.textContent = qc > 0 ? qc.toFixed(1) : '';
+    st.el.classList.toggle('active', !!(player.skill && player.skill.id === 'quickShot'));
+    const dg = slotEls.disengage, dc = player.cooldowns.disengage;
+    dg.cd.style.height = dc > 0 ? (dc / CFG.disengage.cooldown * 100) + '%' : '0%';
+    dg.txt.textContent = dc > 0 ? Math.ceil(dc) : '';
+    dg.el.classList.toggle('active', !!(player.skill && player.skill.id === 'disengage'));
+  } else {
+    st.cd.style.height = (player.swingCd / CFG.staff.cooldown * 100) + '%';
+    st.txt.textContent = player.swingCd > 0 ? player.swingCd.toFixed(1) : '';
+    st.el.classList.toggle('active', player.swingT >= 0);
+  }
 
   const sh = slotEls.shield;
   sh.cd.style.height = (player.cooldowns.shield / CFG.shield.cooldown * 100) + '%';
@@ -3813,6 +4061,10 @@ function updateHUD() {
   const ct = `translate(${aim.x}px, ${aim.y}px)`;
   $('crosshair').style.transform = ct; $('hitmarker').style.transform = ct;
   $('crosshair').classList.toggle('free', aimHold);
+  // red while the crosshair is on the enemy (a pillar in the way doesn't count)
+  let onEnemy = false;
+  if (state === 'playing' && !paused && !player.dead && !bot.dead) { const { origin, dir, near } = aimRay(player); onEnemy = !!resolveShot(origin, dir, CFG.spellRange, player, near).target; }
+  $('crosshair').classList.toggle('enemy', onEnemy);
 
   const cb = $('castbar');
   if (player.casting) {
@@ -3820,7 +4072,7 @@ function updateHUD() {
     cb.style.display = 'block';
     $('castFill').style.width = (p * 100) + '%';
     $('castFill').style.background = '#' + SPELL_COLORS[player.casting.spell].getHexString();
-    $('castLabel').textContent = player.casting.spell !== 'teleport' ? `Casting ${c.name}… ${(c.castTime - player.casting.t).toFixed(1)}s`
+    $('castLabel').textContent = player.casting.spell !== 'teleport' ? `${player.casting.spell === 'aimedShot' ? 'Drawing' : 'Casting'} ${c.name}… ${(c.castTime - player.casting.t).toFixed(1)}s`
       : p < 1 ? `Hold ${K('teleport')} for Teleport… ${(c.castTime - player.casting.t).toFixed(1)}s (letting go now cancels)`
       : `TELEPORT READY — release ${K('teleport')}`;
   } else if (player.drinking) {
@@ -3846,9 +4098,10 @@ function updateHUD() {
   npEl.style.display = np.vis && !bot.dead ? 'block' : 'none';
   npEl.style.transform = `translate(${np.x - 60}px, ${np.y - 20}px)`;
 
+  // blinded by a flash bang: the screen whites out, then fades back over the last part
+  $('flashOverlay').style.opacity = player.blindT > 0 ? Math.min(1, player.blindT / ((player.blindMax || 1) * 0.55)) : 0;
   $('botStatus').innerHTML = `Opponent AI: <b style="color:${botEnabled ? '#6bff8f' : '#ff8a8a'}">${botEnabled ? 'ON' : 'OFF (training dummy)'}</b><br><b>${K('toggleBot')}</b> toggle AI`;
 }
-
 // ============================================================
 // GAME STATE
 // ============================================================
@@ -3862,7 +4115,9 @@ function applyClass() {
   const views = CLASS_VIEWS[selectedClass] || CLASS_VIEWS.sorceress;
   if (player.art !== views) player.setArt(views);
   const sword = selectedClass === 'warrior';
-  slotEls.staff.el.querySelector('.label').textContent = sword ? 'Sword' : 'Staff';
+  const ranger = selectedClass === 'ranger';
+  slotEls.staff.el.querySelector('.label').textContent = sword ? 'Sword' : ranger ? 'Quick Shot' : 'Staff';
+  slotEls.staff.el.querySelector('.icon').textContent = ranger ? '🏹' : '🗡️';
   slotEls.staffBlock.el.querySelector('.label').textContent = sword ? 'Shield Block' : 'Staff Block';
   slotEls.staffBlock.el.querySelector('.icon').textContent = sword ? '🛡️' : '⚔️';
   // the ability bar only shows this class's own skills (potions live on the shared quick bar)
@@ -3871,7 +4126,7 @@ function applyClass() {
 }
 // ability-bar slot → the action that uses it
 const SLOT_ACTIONS = { fireball: 'fireball', heal: 'heal', lightning: 'lightning', teleport: 'teleport', staff: 'melee', shield: 'shield', staffBlock: 'staffBlock', clone: 'clone', gearSword: 'swordGear', gearShield: 'shieldGear',
-  bash: 'bash', charge: 'charge', warCry: 'warCry', whirlwind: 'whirlwind', throwAxe: 'throwAxe' };
+  bash: 'bash', charge: 'charge', warCry: 'warCry', whirlwind: 'whirlwind', throwAxe: 'throwAxe', aimedShot: 'aimedShot', disengage: 'disengage' };
 // Can the player's class use this action? (non-skill actions — moving, jumping, potions, menus — are for everyone)
 function classHas(action) {
   if (!CLASS_SKILL_ACTIONS.includes(action)) return true;
@@ -3908,7 +4163,7 @@ function endRound(won) {
 }
 
 function controlsTable() {
-  const S = 'sorceress', W = 'warrior';
+  const S = 'sorceress', W = 'warrior', R = 'ranger';
   const rows = [
     // [key, description, class] — rows tagged with a class only show when you play that class
     [`${K('forward')} ${K('left')} ${K('back')} ${K('right')}`, 'Move (forward / left / back / right)'],
@@ -3921,7 +4176,7 @@ function controlsTable() {
     [K('fireball'), `Fireball — 10 mana, 2s cast, then ${K('attack')} to shoot`, S],
     [K('heal'), 'Heal — 10 mana, 1.5s cast, restores 30–45 HP', S],
     [K('lightning'), `Lightning — 10 mana, 2s cast, then ${K('attack')} to shoot`, S],
-    [`Hold ${K('teleport')}`, 'Teleport — 10 mana, 30s cooldown. Hold 3s, then release to jump 10m the way you face. Releasing early cancels it (no cost)', S],
+    [`Hold ${K('teleport')}`, `Teleport — ${CFG.teleport.mana} mana, ${CFG.teleport.cooldown}s cooldown. Hold ${CFG.teleport.castTime}s, then release to jump ${CFG.teleport.distance}m the way you face. Releasing early cancels it (no cost)`, S],
     [K('shield'), 'Water Shield — 15 mana, instant: a spinning shield of water in front of you absorbs 95% for 1.5s (20s cooldown)', S],
     [K('clone'), `Clone — ${CFG.clone.mana} mana, instant: an exact copy of you for ${CFG.clone.duration}s. It moves the opposite way to you and copies everything else you do (${CFG.clone.cooldown}s cooldown)`, S],
     [K('melee'), 'Staff swing — big 2s overhand swing: wind-up, then a heavy strike. 10 dmg (20 headshot), close range', S],
@@ -3936,14 +4191,20 @@ function controlsTable() {
     [`${K('attack')} / ${K('melee')}`, `Sword swing — instant, no cooldown, ${CFG.sword.stamina} stamina each. Combo: overhand (left→right), swing again within ${CFG.sword.backWindow}s for a backhand (right→left), and a 3rd within ${CFG.sword.stabWindow}s for a stab (${CFG.sword.stab[0]}–${CFG.sword.stab[1]} dmg); then it starts over. Headshots double`, W],
     [`Hold ${K('shieldUp')} / ${K('staffBlock')}`, `Shield up — held square in front of you, following where you look (${CFG.shieldHoldStaminaPerSec * 2} stamina every 2s, no stamina regen while it's up). Any attack from the front only does ${CFG.warShield.damageTaken} damage; each block costs the shield ${CFG.warShield.costPerBlock} of its ${CFG.warShield.hp} HP, then it breaks (sword parry 30–60% without it)`, W],
     [`${K('swordGear')} / ${K('shieldGear')}`, `Sheathe / draw the sword, sling the shield on your back / ready it — ${CFG.gear.time}s each, one at a time. +${CFG.gear.speedBonus * 100}% move speed for each one put away`, W],
+    [`${K('attack')} / ${K('melee')}`, `Quick Shot — ${CFG.quickShot.stamina} stamina: loose an arrow at the crosshair, ${CFG.quickShot.min}–${CFG.quickShot.max} dmg (headshots double)`, R],
+    [K('aimedShot'), `Aimed Shot — ${CFG.aimedShot.castTime}s full draw, then ${K('attack')} to loose: ${CFG.aimedShot.min}–${CFG.aimedShot.max} dmg (${CFG.aimedShot.cooldown}s cooldown). Hold ${K('attack')} to aim off-centre`, R],
+    [K('disengage'), `Disengage — ${CFG.disengage.stamina} stamina: leap backwards out of reach (${CFG.disengage.cooldown}s cooldown)`, R],
+    [K('cancel'), 'Lower the bow (cancel an Aimed Shot)', R],
     [K('item1'), `Healing Potion — heals ${CFG.healPotion.min}–${CFG.healPotion.max} HP`],
     [K('item2'), `Mana Potion — restores ${CFG.manaPotion.min}–${CFG.manaPotion.max} mana`],
     [K('item3'), 'Refresh Potion — restores stamina to full'],
     [K('item4'), `Explosion Potion — shake it up, then it's thrown (aim higher = further). Explodes on hitting someone/a wall or after ${CFG.explosivePotion.fuse}s: ${CFG.explosivePotion.min}–${CFG.explosivePotion.max} dmg in a ${CFG.explosivePotion.tiles}x${CFG.explosivePotion.tiles} tile area — including you`],
-    ['Potions', `${CFG.potionDrinkTime}s to drink, ${CFG.potionCooldown}s cooldown each, ${CFG.healPotion.perRound} per round (${CFG.explosivePotion.perRound} Explosion)`],
+    [K('item5'), `Flash Bang — shake it, then it's thrown (aim higher = further). Bursts on impact or after ${CFG.flashPotion.fuse}s and blinds anyone within ${CFG.flashPotion.radius}m who can see it for up to ${CFG.flashPotion.blind}s — including you, so look away`],
+    ['Potions', `${CFG.potionDrinkTime}s to drink, ${CFG.potionCooldown}s cooldown each, ${CFG.healPotion.perRound} per round (${CFG.explosivePotion.perRound} Explosion, ${CFG.flashPotion.perRound} Flash Bang)`],
     ['Headshots', 'Double damage'],
   ];
-  return `<table>${rows.filter(r => !r[2] || r[2] === selectedClass).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>`;
+  const cls = CLASSES.find(c => c.id === selectedClass), kitId = cls && cls.base || selectedClass;
+  return `<table>${rows.filter(r => !r[2] || r[2] === kitId).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>`;
 }
 
 let overlayKind = 'menu', settingsFrom = 'menu';
@@ -3955,7 +4216,7 @@ function showOverlay(kind) {
   p.scrollTop = 0;
   const settingsBtn = `<button data-ui="settings">Settings</button>`;
   const cls = CLASSES.find(c => c.id === selectedClass);
-  if (kind === 'menu') p.innerHTML = `<h1>ARCANE DUEL</h1><p>1v1 Sorceress combat · Playing as <span class="playing-as">${cls.name}</span></p>${controlsTable()}<div class="btns"><button data-ui="class" title="Choose which class of character to play">Class</button><button class="primary" data-ui="play">Fight</button><button data-ui="test" title="Practice on a training dummy that never fights back">Test</button>${settingsBtn}</div>`;
+  if (kind === 'menu') p.innerHTML = `<h1>ARCANE DUEL</h1><p>1v1 Sorceress combat · Playing as <span class="playing-as">${cls.name}</span></p>${controlsTable()}<div class="btns"><button data-ui="class" title="Choose which class of character to play">Class</button><button class="primary" data-ui="play">Fight</button><button data-ui="online" title="Fight another person who has this page open">Duel a Friend</button><button data-ui="test" title="Practice on a training dummy that never fights back">Test</button>${settingsBtn}</div>`;
   if (kind === 'class') renderClassSelect();
   if (kind === 'pause') p.innerHTML = `<h1>${testMode ? 'PAUSED — TEST' : 'PAUSED'}</h1>${controlsTable()}<div class="btns"><button class="primary" data-ui="play">Resume</button><button data-ui="restart">Restart</button>${settingsBtn}<button data-ui="mainmenu">Main Menu</button></div>`;
   if (kind === 'win') p.innerHTML = `<h1 style="color:#ffd66b">VICTORY</h1><p>Your rival has fallen.</p><p>Click or press ${K('restart')} to fight again.</p><div class="btns"><button class="primary" data-ui="play">Fight again</button>${settingsBtn}</div>`;
@@ -3968,6 +4229,8 @@ function hideOverlay() { $('overlay').style.display = 'none'; }
 const portraits = {};
 function classPortrait(id) {
   if (!CLASS_VIEWS[id]) return window.CLASS_ART[id];
+  if (CLASS_VIEWS[id].rig) return CLASS_VIEWS[id].portrait;   // 3D model: rendered when the game loaded
+  if (CLASS_VIEWS[id].ranger) return window.CLASS_ART.ranger;   // 3D Ranger: its card keeps the class art the model was made from
   // playable classes: built from their in-game front view (legs, weapon, then the body pieces on top)
   if (!portraits[id]) {
     const v = CLASS_VIEWS[id].front, K = 240, rects = [];
@@ -4052,10 +4315,10 @@ $('overlay').addEventListener('click', (e) => {
 function updateKeyLabels() {
   const labels = {
     fireball: K('fireball'), heal: K('heal'), lightning: K('lightning'), teleport: K('teleport'),
-    staff: selectedClass === 'warrior' ? `${K('attack')}/${K('melee')}` : K('melee'), shield: K('shield'),
+    staff: selectedClass === 'warrior' || selectedClass === 'ranger' ? `${K('attack')}/${K('melee')}` : K('melee'), shield: K('shield'),
     staffBlock: selectedClass === 'warrior' ? `${K('shieldUp')}/${K('staffBlock')}` : K('staffBlock'), clone: K('clone'),
     gearSword: K('swordGear'), gearShield: K('shieldGear'),
-    bash: K('bash'), charge: K('charge'), warCry: K('warCry'), whirlwind: K('whirlwind'), throwAxe: K('throwAxe'),
+    bash: K('bash'), charge: K('charge'), warCry: K('warCry'), whirlwind: K('whirlwind'), throwAxe: K('throwAxe'), aimedShot: K('aimedShot'), disengage: K('disengage'),
   };
   for (const [s, t] of Object.entries(labels)) if (slotEls[s]) slotEls[s].el.querySelector('.key').textContent = t;
   itemEls.forEach((el, i) => el.querySelector('.key').textContent = K(`item${i + 1}`));
@@ -4127,6 +4390,7 @@ function update(dt) {
   for (const f of flashLights) { if (f.t > 0) { f.t = Math.max(0, f.t - dt); f.l.intensity = f.peak * (f.t / f.dur); } else f.l.intensity = 0; }
 
   updateProjectiles(dt);
+  updateArrows(dt);
   updateBolts(dt);
   updateParticles(dt);
   updateBottles(dt);
@@ -4190,7 +4454,7 @@ function mpSnapChar(c, lite = false) {
     gear: c.gear ? [c.gear.item, Math.round((c.gear.t || 0) * 100) / 100] : null,
     ap: Math.round(c.aimPitch * 1000) / 1000, sa: [Math.round(c.shieldAim.x * 100) / 100, Math.round(c.shieldAim.y * 100) / 100],
     drink: c.drinking ? [c.drinking.kind, Math.round(c.drinking.t * 100) / 100] : null, pcd: c.potionCd,
-    cloneT: Math.round((c.cloneT || 0) * 10) / 10
+    cloneT: Math.round((c.cloneT || 0) * 10) / 10, bl: Math.round((c.blindT || 0) * 100) / 100
   };
   if (!lite) { const cl = activeClone(c); s.clone = cl ? mpSnapChar(cl, true) : null; }
   return s;
@@ -4216,6 +4480,8 @@ function mpApplyChar(c, s, dt) {
   c.gear = s.gear ? { item: s.gear[0], t: s.gear[1] } : null;
   c.aimPitch = s.ap; c.shieldAim.x = s.sa[0]; c.shieldAim.y = s.sa[1];
   c.drinking = s.drink ? { kind: s.drink[0], t: s.drink[1] } : null;
+  if ((s.bl || 0) > (c.blindT || 0) + 0.2) { c.blindMax = s.bl; if (c === player) playEarRinging(s.bl); }   // just blinded by a flash bang
+  c.blindT = s.bl || 0;
   c.potionCd = s.pcd; c.cloneT = s.cloneT;
   if (s.clone !== undefined) {
     const cl = activeClone(c);
@@ -4393,11 +4659,13 @@ function mpNewNet(role) {
       else if (msg.kind === 'bolt') _lightningBolt(vv(msg.from), vv(msg.to), msg.hit);
       else if (msg.kind === 'hit') { const p = vv(msg.point); burst(p, 0xffffff, 10, 4, 0.25, 0.3, 2); popText(p, String(Math.round(msg.dmg)), msg.head ? 'crit' : 'dmg'); }
       else if (msg.kind === 'boom') mpBoomVisual(vv(msg.pos));
+      else if (msg.kind === 'arrow') _launchArrow(vv(msg.from), vv(msg.to), null, msg.hit, msg.speed, msg.heavy);
+      else if (msg.kind === 'flash') { const p = vv(msg.pos).setY(Math.max(msg.pos[1], 0.4)); flash(p, 0xffffff, 600, 0.5); burst(p, 0xffffff, 80, 16, 0.9, 0.5, 0); playFlashBang(p); }
     },
 
     // ----- HOST -----
     sendStart() {
-      this.guestItems = [CFG.healPotion.perRound, CFG.manaPotion.perRound, CFG.refreshPotion.perRound, CFG.explosivePotion.perRound];
+      this.guestItems = [CFG.healPotion.perRound, CFG.manaPotion.perRound, CFG.refreshPotion.perRound, CFG.explosivePotion.perRound, CFG.flashPotion.perRound];
       this.send({ t: 'start', hostCls: selectedClass, guestCls: this.guestClass });
       this.started = true;
     },
@@ -4432,17 +4700,18 @@ function mpNewNet(role) {
       if (ev.k !== 'press') return;
       const a = ev.a, cls = this.guestClass || 'sorceress';
       if (CLASS_SKILL_ACTIONS.includes(a)) { const c = CLASSES.find(k => k.id === cls); if (!c || !(c.skills || []).includes(a)) return; }
-      if (a === 'fireball' || a === 'heal' || a === 'lightning' || a === 'teleport') { if (bot.startCast(a)) cloneDo(bot, c => c.startCast(a)); }
+      if (a === 'fireball' || a === 'heal' || a === 'lightning' || a === 'teleport' || a === 'aimedShot') { if (bot.startCast(a)) cloneDo(bot, c => c.startCast(a)); }
+      else if (bot.isRanger && (a === 'melee' || a === 'attack')) { if (!bot.charged && !(bot.casting && bot.casting.spell === 'aimedShot')) bot.useSkill('quickShot'); }
       else if (a === 'melee' || (a === 'attack' && bot.isWarrior)) { if (bot.startSwing()) cloneDo(bot, c => c.startSwing()); }
       else if (a === 'swordGear' || a === 'shieldGear') { bot.toggleGear(a === 'swordGear' ? 'sword' : 'shield'); cloneDo(bot, c => c.toggleGear(a === 'swordGear' ? 'sword' : 'shield')); }
-      else if (WARRIOR_SKILLS.includes(a)) bot.useSkill(a);
+      else if (WARRIOR_SKILLS.includes(a) || a === 'disengage') bot.useSkill(a);
       else if (a === 'shield') { if (bot.castShield()) cloneDo(bot, c => c.castShield()); }
       else if (a === 'clone') castClone(bot);
       else if (a === 'cancel') { bot.cancel(); cloneDo(bot, c => c.cancel()); }
       else if (a.startsWith('item')) this.hostUseItem(+a.slice(4) - 1);
     },
     hostUseItem(i) {
-      const kinds = ['heal', 'mana', 'refresh', 'explosive'];
+      const kinds = ['heal', 'mana', 'refresh', 'explosive', 'flash'];
       const kind = kinds[i]; if (!kind || !this.guestItems || this.guestItems[i] <= 0) return;
       const err = startDrinking(bot, kind, () => { this.guestItems[i]--; });
       if (!err) cloneDo(bot, c => startDrinking(c, kind));
@@ -4458,10 +4727,10 @@ function mpNewNet(role) {
         if (a === 'jump') jumpQueued = true;
         else if (a === 'roll') rollQueued = true;
         else if (a === 'attack' && player.charged) aimHold = true;
-        else if (a === 'attack' && player.isWarrior) this.send({ t: 'ev', k: 'press', a });
+        else if (a === 'attack' && (player.isWarrior || player.isRanger)) this.send({ t: 'ev', k: 'press', a });
         else if (a === 'fireball' || a === 'heal' || a === 'lightning' || a === 'teleport' || a === 'melee' ||
                  a === 'shield' || a === 'clone' || a === 'cancel' || a === 'swordGear' || a === 'shieldGear' ||
-                 WARRIOR_SKILLS.includes(a) || a.startsWith('item')) this.send({ t: 'ev', k: 'press', a });
+                 WARRIOR_SKILLS.includes(a) || a === 'aimedShot' || a === 'disengage' || a.startsWith('item')) this.send({ t: 'ev', k: 'press', a });
       }
     },
     guestFrame(dt) {
@@ -4502,7 +4771,7 @@ function mpNewNet(role) {
         br.light.intensity = 26 + Math.sin(time * 13 + br.pos.x) * 4 + Math.random() * 3;
       }
       for (const fl of flashLights) { if (fl.t > 0) { fl.t = Math.max(0, fl.t - dt); fl.l.intensity = fl.peak * (fl.t / fl.dur); } else fl.l.intensity = 0; }
-      updateProjectiles(dt); updateBolts(dt); updateParticles(dt); updateBottles(dt); updateExplosives(dt);
+      updateProjectiles(dt); updateArrows(dt); updateBolts(dt); updateParticles(dt); updateBottles(dt); updateExplosives(dt);
       updateStatusFx(player, time); updateStatusFx(bot, time);
     }
   };
@@ -4565,6 +4834,16 @@ const _dealDamage = dealDamage;
 dealDamage = function (target, amount, isHead, point, attacker) {
   _dealDamage(target, amount, isHead, point, attacker);
   if (MPNET && MPNET.host && MPNET.started && point) MPNET.send({ t: 'fx', kind: 'hit', point: va(point), dmg: amount, head: isHead ? 1 : 0 });
+};
+const _launchArrow = launchArrow;
+launchArrow = function (from, to, onArrive, hit = false, speed = 80, heavy = false) {
+  _launchArrow(from, to, onArrive, hit, speed, heavy);
+  if (MPNET && MPNET.host && MPNET.started) MPNET.send({ t: 'fx', kind: 'arrow', from: va(from), to: va(to), hit, speed, heavy });
+};
+const _flashBang = flashBang;
+flashBang = function (pos, owner) {
+  _flashBang(pos, owner);   // on the host this blinds both fighters; the guest's blindness reaches them in snapshots
+  if (MPNET && MPNET.host && MPNET.started) MPNET.send({ t: 'fx', kind: 'flash', pos: va(pos) });
 };
 const _explodePotion = explodePotion;
 explodePotion = function (pos, owner) {
